@@ -14,6 +14,9 @@ pub struct NoteProps {
     host: Host,
 
     #[props(into)]
+    uri: String,
+
+    #[props(into)]
     avatar_url: String,
 
     #[props(into)]
@@ -55,6 +58,7 @@ pub fn Home() -> Element {
                 .into_iter()
                 .map(|x| NoteProps {
                     host: x.host,
+                    uri: x.uri,
                     avatar_url: x.note.user.avatar_url,
                     user_name: x.note.user.name.unwrap_or(x.note.user.username),
                     note_info: format!(
@@ -80,8 +84,10 @@ pub fn Column(props: ColumnProps) -> Element {
         div {
             for note in props.notes.read().deref() {
                 article {
+                    key: "{note.uri}",
                     Note {
                         host: note.host.clone(),
+                        uri: &note.uri,
                         avatar_url: &note.avatar_url,
                         user_name: &note.user_name,
                         note_info: &note.note_info,

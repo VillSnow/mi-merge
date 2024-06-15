@@ -22,7 +22,7 @@ use crate::{
 pub struct NoteKey {
     pub created_at: DateTime<Utc>,
     pub host: Host,
-    pub id: String,
+    pub uri: String,
 }
 
 #[derive(Debug)]
@@ -58,20 +58,19 @@ impl NoteKey {
             .map(|s| Host::from(s.clone()))
             .unwrap_or(host.clone());
 
-        let original_id = if &note_host == host {
-            note.id.clone()
+        let uri = if &note_host == host {
+            format!("https://{}/notes/{}", host, note.id)
         } else {
-            let uri = note.uri.as_ref().ok_or(MergedTimeLineError::InvalidNote)?;
-            uri.rsplit("/")
-                .next()
+            note.uri
+                .as_ref()
                 .ok_or(MergedTimeLineError::InvalidNote)?
-                .to_owned()
+                .clone()
         };
         Ok(NoteKey {
             created_at: DateTime::from_str(&note.created_at)
                 .map_err(|_| MergedTimeLineError::InvalidNote)?,
             host: note_host.clone(),
-            id: original_id,
+            uri,
         })
     }
 }
@@ -91,6 +90,7 @@ impl MergedTimeline {
 
         let key = NoteKey::from_note(&host, &note)?;
         let note_host = key.host.clone();
+        let note_uri = key.uri.clone();
 
         match self.dictionary.entry(key) {
             Occupied(dict_entry) => {
@@ -106,6 +106,7 @@ impl MergedTimeline {
                 let inserting_created_at = note.created_at.clone();
                 let entry = Arc::new(RwLock::new(NoteEntry {
                     host: note_host,
+                    uri: note_uri,
                     note,
                     branches,
                     inserted_at: now.clone(),

@@ -31,6 +31,7 @@ pub struct Credential {
 #[derive(Debug, Clone)]
 pub struct NoteEntry {
     pub host: Host,
+    pub uri: String,
     pub note: Note,
     pub branches: HashSet<String>,
     pub inserted_at: Instant,
