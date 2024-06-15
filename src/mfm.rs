@@ -1,4 +1,9 @@
+use std::error::Error;
+
 use fancy_regex::Regex;
+use serde_json::json;
+
+use crate::{common_types::Host, entries::Emoji};
 
 pub enum DecomposedTextItem<'a> {
     Text(&'a str),
@@ -33,5 +38,25 @@ impl Decomposer {
         }
 
         result
+    }
+
+    pub async fn fetch_emoji(&self, host: &Host, name: &str) -> Result<Emoji, Box<dyn Error>> {
+        let _span = tracing::span!(
+            tracing::Level::INFO,
+            "fetch_emoji",
+            host = host.to_string(),
+            name
+        );
+
+        let client = reqwest::Client::new();
+        let res = client
+            .post(format!("https://{}/api/emoji", host.to_string()))
+            .json(&json!({ "name": name }))
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let res = res.json().await?;
+        Ok(res)
     }
 }

@@ -1,6 +1,8 @@
-use std::fmt::Display;
+use std::{collections::HashSet, fmt::Display, time::Instant};
 
 use serde::{Deserialize, Serialize};
+
+use crate::entries::Note;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Host(String); // ex: "misskey.io"
@@ -24,4 +26,12 @@ pub struct Credential {
 
     #[serde(default)]
     pub disable: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct NoteEntry {
+    pub host: Host,
+    pub note: Note,
+    pub branches: HashSet<String>,
+    pub inserted_at: Instant,
 }

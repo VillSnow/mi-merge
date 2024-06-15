@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     error::Error,
+    ops::Deref,
     str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
@@ -12,7 +13,10 @@ use tokio::sync::{
     RwLock,
 };
 
-use crate::{common_types::Host, entries::Note};
+use crate::{
+    common_types::{Host, NoteEntry},
+    entries::Note,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NoteKey {
@@ -38,18 +42,11 @@ impl std::fmt::Display for MergedTimeLineError {
 
 impl Error for MergedTimeLineError {}
 
-#[derive(Debug)]
-struct Entry {
-    note: Note,
-    branches: HashSet<String>,
-    inserted_at: Instant,
-}
-
 #[derive(Debug, Default)]
 pub struct MergedTimeline {
-    column: VecDeque<Arc<RwLock<Entry>>>,
-    dictionary: HashMap<NoteKey, Arc<RwLock<Entry>>>,
-    column_senders: Vec<UnboundedSender<Vec<Note>>>,
+    column: VecDeque<Arc<RwLock<NoteEntry>>>,
+    dictionary: HashMap<NoteKey, Arc<RwLock<NoteEntry>>>,
+    column_senders: Vec<UnboundedSender<Vec<NoteEntry>>>,
 }
 
 impl NoteKey {
@@ -93,6 +90,7 @@ impl MergedTimeline {
         use std::collections::hash_map::Entry::{Occupied, Vacant};
 
         let key = NoteKey::from_note(&host, &note)?;
+        let note_host = key.host.clone();
 
         match self.dictionary.entry(key) {
             Occupied(dict_entry) => {
@@ -106,7 +104,8 @@ impl MergedTimeline {
                 let now = Instant::now();
 
                 let inserting_created_at = note.created_at.clone();
-                let entry = Arc::new(RwLock::new(Entry {
+                let entry = Arc::new(RwLock::new(NoteEntry {
+                    host: note_host,
                     note,
                     branches,
                     inserted_at: now.clone(),
@@ -132,7 +131,7 @@ impl MergedTimeline {
 
         let mut next_value = Vec::new();
         for x in &self.column {
-            next_value.push(x.read().await.note.clone());
+            next_value.push(x.read().await.deref().clone());
         }
         for tx in &self.column_senders {
             tx.send(next_value.clone()).expect("mpsc error");
@@ -141,7 +140,7 @@ impl MergedTimeline {
         Ok(())
     }
 
-    pub fn make_column_receiver(&mut self) -> UnboundedReceiver<Vec<Note>> {
+    pub fn make_column_receiver(&mut self) -> UnboundedReceiver<Vec<NoteEntry>> {
         let (tx, rx) = unbounded_channel();
         self.column_senders.push(tx);
         rx

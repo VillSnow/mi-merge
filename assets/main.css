@@ -70,5 +70,11 @@ body {
 
   .body {
     grid-area: body;
+    white-space: pre-wrap;
+
+    .emoji {
+      height: 2em;
+      vertical-align: middle;
+    }
   }
 }

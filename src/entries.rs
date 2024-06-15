@@ -209,13 +209,13 @@ pub struct Emoji {
 
     pub name: String,
 
-    pub category: String,
+    pub category: Option<String>,
 
-    pub host: String,
+    pub host: Option<String>,
 
     pub url: String,
 
-    pub license: String,
+    pub license: Option<String>,
 
     #[serde(rename = "isSensitive")]
     pub is_sensitive: bool,
