@@ -1,0 +1,74 @@
+body {
+  background-color: #ccc;
+}
+
+#main {
+  margin: 0;
+  display: grid;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+#links {
+  width: 400px;
+  text-align: left;
+  font-size: x-large;
+  color: white;
+  display: flex;
+  flex-direction: column;
+}
+
+#links a {
+  color: white;
+  text-decoration: none;
+  margin-top: 20px;
+  margin: 10px;
+  border: white 1px solid;
+  border-radius: 5px;
+  padding: 10px;
+}
+
+#links a:hover {
+  background-color: #1f1f1f;
+  cursor: pointer;
+}
+
+#header {
+  max-width: 1200px;
+}
+
+.note {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "avatar header"
+    "avatar body  "
+    "avatar footer";
+  gap: 2px;
+
+  .avatar {
+    grid-area: avatar;
+    img {
+      min-width: 50px;
+      min-height: 50px;
+      max-width: 50px;
+      max-height: 50px;
+    }
+  }
+
+  .header {
+    grid-area: header;
+    display: flex;
+
+    .user-name {
+      flex: 1 1 0;
+    }
+    .note-info {
+      flex: 0 0 auto;
+    }
+  }
+
+  .body {
+    grid-area: body;
+  }
+}
