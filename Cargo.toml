@@ -14,7 +14,7 @@ dotenv = "0.15.0"
 fancy-regex = "0.13.0"
 futures-util = "0.3.30"
 regex = "1.10.4"
-reqwest = "0.12.4"
+reqwest = { version = "0.12.4", features = ["json"] }
 tokio-tungstenite = { version = "0.23.0", features = ["native-tls"] }
 tokio = "1.38.0"
 tracing = "0.1.40"

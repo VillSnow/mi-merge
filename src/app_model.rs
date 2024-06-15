@@ -8,11 +8,10 @@ use std::{
 
 use serde_json::json;
 use tokio::sync::RwLock;
-use uuid::Uuid;
 
 use crate::{
     common_types::{Credential, Host},
-    entries::{WsMsg, WsMsgChannelBody},
+    entries::{Note, WsMsg, WsMsgChannelBody},
     merged_timeline::MergedTimeline,
     server_cxn::ServerCxn,
 };
@@ -46,19 +45,7 @@ impl AppModel {
         assert!(!self.server_cxn_store.contains_key(host));
 
         let mut cxn = ServerCxn::new(host.clone(), api_key.to_owned());
-
-        let hybrid_timeline = Uuid::new_v4().to_string();
-        cxn.send(
-            json!({
-            "type": "connect",
-            "body": {
-                "id": hybrid_timeline.clone(),
-                "channel": "hybridTimeline",
-                "params": {}
-                }
-            })
-            .to_string(),
-        );
+        cxn.connect_to_hybrid();
 
         let tl = self.merged_timeline.clone();
         let host1 = host.clone();
@@ -79,5 +66,35 @@ impl AppModel {
 
         self.server_cxn_store
             .insert(host.clone(), Arc::new(RwLock::new(cxn)));
+
+        match fetch_hybrid_notes(host, api_key).await {
+            Ok(notes) => {
+                let mut tl = self.merged_timeline.write().await;
+                for note in notes.into_iter().rev() {
+                    tl.insert(host.clone(), HashSet::new(), note)
+                        .await
+                        .expect("TODO: handle error");
+                }
+            }
+            Err(e) => {
+                tracing::error!("failed to fetch notes: {e}");
+            }
+        }
     }
+}
+
+async fn fetch_hybrid_notes(host: &Host, api_key: &str) -> Result<Vec<Note>, Box<dyn Error>> {
+    let client = reqwest::Client::new();
+    let res = client
+        .post(format!(
+            "https://{}/api/notes/hybrid-timeline",
+            host.to_string()
+        ))
+        .json(&json!({ "i": api_key }))
+        .send()
+        .await?
+        .error_for_status()?;
+
+    let res = res.json().await?;
+    Ok(res)
 }

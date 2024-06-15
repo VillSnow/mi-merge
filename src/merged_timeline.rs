@@ -1,9 +1,9 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     error::Error,
-    future::Future,
     str::FromStr,
     sync::Arc,
+    time::{Duration, Instant},
 };
 
 use chrono::{DateTime, Utc};
@@ -12,7 +12,7 @@ use tokio::sync::{
     RwLock,
 };
 
-use crate::{common_types::Host, entries::Note, subject::SubjectMut};
+use crate::{common_types::Host, entries::Note};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NoteKey {
@@ -42,6 +42,7 @@ impl Error for MergedTimeLineError {}
 struct Entry {
     note: Note,
     branches: HashSet<String>,
+    inserted_at: Instant,
 }
 
 #[derive(Debug, Default)]
@@ -102,8 +103,29 @@ impl MergedTimeline {
                 entry.branches.extend(branches.clone().into_iter());
             }
             Vacant(dict_entry) => {
-                let entry = Arc::new(RwLock::new(Entry { note, branches }));
-                self.column.push_front(entry.clone());
+                let now = Instant::now();
+
+                let inserting_created_at = note.created_at.clone();
+                let entry = Arc::new(RwLock::new(Entry {
+                    note,
+                    branches,
+                    inserted_at: now.clone(),
+                }));
+
+                let sort_limit_dur = Duration::from_millis(500);
+
+                let mut n = self.column.len();
+                for i in 0..self.column.len() {
+                    let exists = self.column[i].read().await;
+                    if inserting_created_at >= exists.note.created_at
+                        || now.duration_since(exists.inserted_at) > sort_limit_dur
+                    {
+                        n = i;
+                        break;
+                    }
+                }
+                self.column.insert(n, entry.clone());
+
                 dict_entry.insert(entry);
             }
         }

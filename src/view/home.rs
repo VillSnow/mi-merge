@@ -43,7 +43,7 @@ pub fn Home() -> Element {
                 .map(|x| NoteProps {
                     avatar_url: x.user.avatar_url,
                     user_name: x.user.name.unwrap_or(x.user.username),
-                    note_info: format!("{:?} {:?}", x.visibility, x.local_only),
+                    note_info: format!("{} {:?} {:?}", x.created_at, x.visibility, x.local_only),
                     text: x.text.unwrap_or("".to_owned()),
                 })
                 .collect();

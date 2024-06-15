@@ -6,6 +6,7 @@ use std::{
 };
 
 use futures_util::{SinkExt, StreamExt};
+use serde_json::json;
 use tokio::{
     sync::{
         mpsc::{self, UnboundedReceiver, UnboundedSender},
@@ -15,6 +16,7 @@ use tokio::{
 };
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{debug, error, info};
+use uuid::Uuid;
 
 use crate::{common_types::Host, entries::WsMsg, subject::SubjectMut};
 
@@ -57,6 +59,8 @@ pub struct ServerCxn {
     send_thr: ThrResource<(UnboundedReceiver<String>, Option<String>)>,
 
     received_messages: Arc<Mutex<SubjectMut<WsMsg>>>,
+
+    hybrid_timeline_id: Option<String>,
 }
 
 impl<T> ThrResource<T> {
@@ -96,6 +100,8 @@ impl ServerCxn {
             send_thr: ThrResource::Offline((inlet_rx, None)),
 
             received_messages: Arc::new(Mutex::new(SubjectMut::new())),
+
+            hybrid_timeline_id: None,
         }
     }
 
@@ -158,6 +164,22 @@ impl ServerCxn {
         });
 
         Ok(())
+    }
+
+    pub fn connect_to_hybrid(&mut self) {
+        let hybrid_timeline_id = Uuid::new_v4().to_string();
+        self.send(
+            json!({
+                "type": "connect",
+                "body": {
+                    "id": hybrid_timeline_id.clone(),
+                    "channel": "hybridTimeline",
+                    "params": {}
+                }
+            })
+            .to_string(),
+        );
+        self.hybrid_timeline_id = Some(hybrid_timeline_id);
     }
 
     pub fn send(&self, message: String) {
