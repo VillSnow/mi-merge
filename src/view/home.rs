@@ -101,6 +101,15 @@ pub fn Column(props: ColumnProps) -> Element {
 
 #[component]
 pub fn Note(props: NoteProps) -> Element {
+    let decomposed = get_decomposer().decompose(&props.user_name);
+    let username = decomposed.into_iter().map(|x| match x {
+        crate::mfm::DecomposedTextItem::Text(x) => rsx!("{x}"),
+        crate::mfm::DecomposedTextItem::Emoji(x) => rsx!(Emoji {
+            host: props.host.clone(),
+            name: x
+        }),
+    });
+
     let decomposed = get_decomposer().decompose(&props.text);
     let body = decomposed.into_iter().map(|x| match x {
         crate::mfm::DecomposedTextItem::Text(x) => rsx!("{x}"),
@@ -118,9 +127,9 @@ pub fn Note(props: NoteProps) -> Element {
             }
             div{
                 class: "header",
-            div {
-                class: "user-name",
-                    "{props.user_name}"
+                div {
+                    class: "user-name",
+                    span { {username} }
                 }
                 div {
                     class: "note-info",
