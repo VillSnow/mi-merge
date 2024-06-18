@@ -33,6 +33,20 @@ pub struct NoteEntry {
     pub host: Host,
     pub uri: String,
     pub note: Note,
-    pub branches: HashSet<String>,
+    pub branches: HashSet<Branch>,
     pub inserted_at: Instant,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Branch {
+    pub host: Host,
+    pub timeline: BranchTimeline,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum BranchTimeline {
+    Home,
+    Local,
+    Channel(String),
+    Antenna(String),
 }

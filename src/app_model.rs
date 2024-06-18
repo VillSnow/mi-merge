@@ -8,9 +8,10 @@ use std::{
 
 use serde_json::json;
 use tokio::sync::RwLock;
+use tracing::warn;
 
 use crate::{
-    common_types::{Credential, Host},
+    common_types::{Branch, BranchTimeline, Credential, Host},
     entries::{Note, WsMsg, WsMsgChannelBody},
     merged_timeline::MergedTimeline,
     server_cxn::ServerCxn,
@@ -20,6 +21,7 @@ use crate::{
 pub struct AppModel {
     pub merged_timeline: Arc<RwLock<MergedTimeline>>,
     pub server_cxn_store: HashMap<Host, Arc<RwLock<ServerCxn>>>,
+    pub branches: Vec<Branch>,
 }
 
 impl AppModel {
@@ -27,6 +29,7 @@ impl AppModel {
         Self {
             merged_timeline: Arc::new(RwLock::new(MergedTimeline::new())),
             server_cxn_store: Default::default(),
+            branches: Vec::new(),
         }
     }
 
@@ -45,35 +48,103 @@ impl AppModel {
         assert!(!self.server_cxn_store.contains_key(host));
 
         let mut cxn = ServerCxn::new(host.clone(), api_key.to_owned());
-        cxn.connect_to_hybrid();
+
+        let home_timeline_id = cxn.connect_to_home();
+        self.branches.push(Branch {
+            host: host.clone(),
+            timeline: BranchTimeline::Home,
+        });
+
+        let local_timeline_id = cxn.connect_to_local();
+        self.branches.push(Branch {
+            host: host.clone(),
+            timeline: BranchTimeline::Local,
+        });
 
         let tl = self.merged_timeline.clone();
         let host1 = host.clone();
 
-        let f = |tl: Arc<RwLock<MergedTimeline>>, host: Host, m: WsMsg| async move {
+        async fn f(
+            tl: Arc<RwLock<MergedTimeline>>,
+            home_timeline_id: String,
+            local_timeline_id: String,
+            host: Host,
+            m: WsMsg,
+        ) {
             match m {
-                WsMsg::Channel(WsMsgChannelBody::Note { id: _, body }) => {
+                WsMsg::Channel(WsMsgChannelBody::Note { id, body }) => {
+                    let branch = if id == home_timeline_id {
+                        Branch {
+                            host: host.clone(),
+                            timeline: BranchTimeline::Home,
+                        }
+                    } else if id == local_timeline_id {
+                        Branch {
+                            host: host.clone(),
+                            timeline: BranchTimeline::Local,
+                        }
+                    } else {
+                        warn!("unknown connection id");
+                        return;
+                    };
+
                     let mut tl = tl.write().await;
-                    tl.insert(host, HashSet::new(), body)
+                    tl.insert(host.clone(), HashSet::from([branch]), body)
                         .await
                         .expect("TODO: handle error");
                 }
             }
-        };
-        cxn.subscribe(move |m| f(tl.clone(), host1.clone(), m))
-            .await;
+        }
+
+        cxn.subscribe(move |m| {
+            f(
+                tl.clone(),
+                home_timeline_id.clone(),
+                local_timeline_id.clone(),
+                host1.clone(),
+                m,
+            )
+        })
+        .await;
         cxn.spawn().await.expect("TODO: handle error");
 
         self.server_cxn_store
             .insert(host.clone(), Arc::new(RwLock::new(cxn)));
 
-        match fetch_hybrid_notes(host, api_key).await {
+        match fetch_home_notes(host, api_key).await {
             Ok(notes) => {
                 let mut tl = self.merged_timeline.write().await;
                 for note in notes.into_iter().rev() {
-                    tl.insert(host.clone(), HashSet::new(), note)
-                        .await
-                        .expect("TODO: handle error");
+                    tl.insert(
+                        host.clone(),
+                        HashSet::from([Branch {
+                            host: host.clone(),
+                            timeline: BranchTimeline::Home,
+                        }]),
+                        note,
+                    )
+                    .await
+                    .expect("TODO: handle error");
+                }
+            }
+            Err(e) => {
+                tracing::error!("failed to fetch notes: {e}");
+            }
+        }
+        match fetch_local_notes(host, api_key).await {
+            Ok(notes) => {
+                let mut tl = self.merged_timeline.write().await;
+                for note in notes.into_iter().rev() {
+                    tl.insert(
+                        host.clone(),
+                        HashSet::from([Branch {
+                            host: host.clone(),
+                            timeline: BranchTimeline::Local,
+                        }]),
+                        note,
+                    )
+                    .await
+                    .expect("TODO: handle error");
                 }
             }
             Err(e) => {
@@ -83,11 +154,24 @@ impl AppModel {
     }
 }
 
-async fn fetch_hybrid_notes(host: &Host, api_key: &str) -> Result<Vec<Note>, Box<dyn Error>> {
+async fn fetch_home_notes(host: &Host, api_key: &str) -> Result<Vec<Note>, Box<dyn Error>> {
+    let client = reqwest::Client::new();
+    let res = client
+        .post(format!("https://{}/api/notes/timeline", host.to_string()))
+        .json(&json!({ "i": api_key }))
+        .send()
+        .await?
+        .error_for_status()?;
+
+    let res = res.json().await?;
+    Ok(res)
+}
+
+async fn fetch_local_notes(host: &Host, api_key: &str) -> Result<Vec<Note>, Box<dyn Error>> {
     let client = reqwest::Client::new();
     let res = client
         .post(format!(
-            "https://{}/api/notes/hybrid-timeline",
+            "https://{}/api/notes/local-timeline",
             host.to_string()
         ))
         .json(&json!({ "i": api_key }))

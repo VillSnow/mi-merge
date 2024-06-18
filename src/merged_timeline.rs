@@ -14,7 +14,7 @@ use tokio::sync::{
 };
 
 use crate::{
-    common_types::{Host, NoteEntry},
+    common_types::{Branch, Host, NoteEntry},
     entries::Note,
 };
 
@@ -83,7 +83,7 @@ impl MergedTimeline {
     pub async fn insert(
         &mut self,
         host: Host,
-        branches: HashSet<String>,
+        branches: HashSet<Branch>,
         note: Note,
     ) -> Result<(), MergedTimeLineError> {
         use std::collections::hash_map::Entry::{Occupied, Vacant};

@@ -60,7 +60,8 @@ pub struct ServerCxn {
 
     received_messages: Arc<Mutex<SubjectMut<WsMsg>>>,
 
-    hybrid_timeline_id: Option<String>,
+    home_timeline_id: Option<String>,
+    local_timeline_id: Option<String>,
 }
 
 impl<T> ThrResource<T> {
@@ -101,7 +102,8 @@ impl ServerCxn {
 
             received_messages: Arc::new(Mutex::new(SubjectMut::new())),
 
-            hybrid_timeline_id: None,
+            home_timeline_id: None,
+            local_timeline_id: None,
         }
     }
 
@@ -166,20 +168,38 @@ impl ServerCxn {
         Ok(())
     }
 
-    pub fn connect_to_hybrid(&mut self) {
-        let hybrid_timeline_id = Uuid::new_v4().to_string();
+    pub fn connect_to_home(&mut self) -> String {
+        let home_timeline_id = Uuid::new_v4().to_string();
         self.send(
             json!({
                 "type": "connect",
                 "body": {
-                    "id": hybrid_timeline_id.clone(),
-                    "channel": "hybridTimeline",
+                    "id": home_timeline_id.clone(),
+                    "channel": "homeTimeline",
                     "params": {}
                 }
             })
             .to_string(),
         );
-        self.hybrid_timeline_id = Some(hybrid_timeline_id);
+        self.home_timeline_id = Some(home_timeline_id.clone());
+        home_timeline_id
+    }
+
+    pub fn connect_to_local(&mut self) -> String {
+        let local_timeline_id = Uuid::new_v4().to_string();
+        self.send(
+            json!({
+                "type": "connect",
+                "body": {
+                    "id": local_timeline_id.clone(),
+                    "channel": "localTimeline",
+                    "params": {}
+                }
+            })
+            .to_string(),
+        );
+        self.local_timeline_id = Some(local_timeline_id.clone());
+        local_timeline_id
     }
 
     pub fn send(&self, message: String) {
