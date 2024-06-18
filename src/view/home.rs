@@ -114,9 +114,7 @@ pub fn Home() -> Element {
     });
 
     rsx! {
-        Column {
-            notes: notes
-        }
+        Column { notes }
     }
 }
 
@@ -125,8 +123,7 @@ pub fn Column(props: ColumnProps) -> Element {
     rsx! {
         div {
             for note in props.notes.read().deref() {
-                article {
-                    key: "{note.uri}",
+                article { key: "{note.uri}",
                     Note {
                         host: note.host.clone(),
                         uri: &note.uri,
@@ -134,7 +131,7 @@ pub fn Column(props: ColumnProps) -> Element {
                         user_name: &note.user_name,
                         note_info: &note.note_info,
                         text: &note.text,
-                        branch_fragments: note.branch_fragments.clone(),
+                        branch_fragments: note.branch_fragments.clone()
                     }
                 }
             }
@@ -146,25 +143,22 @@ pub fn Column(props: ColumnProps) -> Element {
 pub fn Note(props: NoteProps) -> Element {
     let decomposed = get_decomposer().decompose(&props.user_name);
     let username = decomposed.into_iter().map(|x| match x {
-        crate::mfm::DecomposedTextItem::Text(x) => rsx!("{x}"),
-        crate::mfm::DecomposedTextItem::Emoji(x) => rsx!(Emoji {
-            host: props.host.clone(),
-            name: x
-        }),
+        crate::mfm::DecomposedTextItem::Text(x) => rsx! { "{x}" },
+        crate::mfm::DecomposedTextItem::Emoji(x) => rsx! {
+            Emoji { host: props.host.clone(), name: x }
+        },
     });
 
     let decomposed = get_decomposer().decompose(&props.text);
     let body = decomposed.into_iter().map(|x| match x {
-        crate::mfm::DecomposedTextItem::Text(x) => rsx!("{x}"),
-        crate::mfm::DecomposedTextItem::Emoji(x) => rsx!(Emoji {
-            host: props.host.clone(),
-            name: x
-        }),
+        crate::mfm::DecomposedTextItem::Text(x) => rsx! { "{x}" },
+        crate::mfm::DecomposedTextItem::Emoji(x) => rsx! {
+            Emoji { host: props.host.clone(), name: x }
+        },
     });
     let branches = props.branch_fragments.iter().map(|x| {
-        let top_line = rsx!(
-            div{
-                class: "svg-container",
+        let top_line = rsx! {
+            div { class: "svg-container",
                 svg {
                     class: "branch-line",
                     view_box: "0 0 100 100",
@@ -182,10 +176,9 @@ pub fn Note(props: NoteProps) -> Element {
                     }
                 }
             }
-        );
-        let full_line = rsx!(
-            div{
-                class: "svg-container",
+        };
+        let full_line = rsx! {
+            div { class: "svg-container",
                 svg {
                     class: "branch-line",
                     view_box: "0 0 100 100",
@@ -203,10 +196,9 @@ pub fn Note(props: NoteProps) -> Element {
                     }
                 }
             }
-        );
-        let dot = rsx!(
-            div {
-                class: "svg-container",
+        };
+        let dot = rsx! {
+            div { class: "svg-container",
                 svg {
                     class: "branch-dot",
                     view_box: "0 0 100 100",
@@ -222,62 +214,46 @@ pub fn Note(props: NoteProps) -> Element {
                     }
                 }
             }
-        );
+        };
         match x.view {
-            BranchFragmentView::None => rsx!(div {
-                class: "branch-fragment",
-            }),
-            BranchFragmentView::Top => rsx!(
-                div{
-                    class: "branch-fragment",
-                    {top_line}
+            BranchFragmentView::None => rsx! {
+                div { class: "branch-fragment" }
+            },
+            BranchFragmentView::Top => rsx! {
+                div { class: "branch-fragment",
+                    {top_line},
                     {dot}
                 }
-            ),
-            BranchFragmentView::Full => rsx!(
-                div {
-                    class: "branch-fragment",
-                    {full_line}
+            },
+            BranchFragmentView::Full => rsx! {
+                div { class: "branch-fragment",
+                    {full_line},
                     {dot}
                 }
-            ),
-            BranchFragmentView::Skip => rsx!(
-                div {
-                    class: "branch-fragment",
-                    {full_line}
-                }
-            ),
+            },
+            BranchFragmentView::Skip => rsx! {
+                div { class: "branch-fragment", {full_line} }
+            },
         }
     });
 
-    rsx!(
-        div{
-            class: "note",
-            div{
-                class: "branches",
-                {branches}
+    rsx! {
+        div { class: "note",
+            div { class: "branches", {branches} }
+            div { class: "avatar",
+                img { src: "{props.avatar_url}" }
             }
-            div{
-                class: "avatar",
-                img {  src: "{props.avatar_url}" }
-            }
-            div{
-                class: "header",
-                div {
-                    class: "user-name",
+            div { class: "header",
+                div { class: "user-name",
                     span { {username} }
                 }
-                div {
-                    class: "note-info",
-                    "{props.note_info}"
-                }
+                div { class: "note-info", "{props.note_info}" }
             }
-            div {
-                class: "body",
+            div { class: "body",
                 span { {body} }
             }
         }
-    )
+    }
 }
 
 #[component]
@@ -299,12 +275,13 @@ pub fn Emoji(props: EmojiProp) -> Element {
 
     let url = url.read();
     if let Some(url) = url.as_ref().and_then(|x| x.as_ref()) {
-        rsx!(img {
-            class: "emoji",
-            src: url.as_str()
-        })
+        rsx! {
+            img { class: "emoji", src: url.as_str() }
+        }
     } else {
-        rsx!(span { ":{props.name}:" })
+        rsx! {
+            span { ":{props.name}:" }
+        }
     }
 }
 
