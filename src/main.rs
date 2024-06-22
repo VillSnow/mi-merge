@@ -7,10 +7,8 @@ mod global_state;
 mod merged_timeline;
 mod mfm;
 mod server_cxn;
-mod subject;
 mod view;
 
-use app_model::AppModel;
 use dioxus::{desktop::use_window, prelude::*};
 
 use global_state::get_app_model;

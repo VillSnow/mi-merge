@@ -2,23 +2,19 @@ use std::{
     error::Error,
     future::Future,
     mem::{forget, MaybeUninit},
-    sync::Arc,
 };
 
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
 use tokio::{
-    sync::{
-        mpsc::{self, UnboundedReceiver, UnboundedSender},
-        Mutex,
-    },
+    sync::mpsc::{self, error::TryRecvError, UnboundedReceiver, UnboundedSender},
     task::JoinHandle,
 };
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
-use crate::{common_types::Host, entries::WsMsg, subject::SubjectMut};
+use crate::{common_types::Host, entries::WsMsg};
 
 #[derive(Debug)]
 pub enum ServerCxnError {
@@ -57,8 +53,6 @@ pub struct ServerCxn {
 
     recv_thr: ThrResource<UnboundedSender<WsMsg>>,
     send_thr: ThrResource<(UnboundedReceiver<String>, Option<String>)>,
-
-    received_messages: Arc<Mutex<SubjectMut<WsMsg>>>,
 
     home_timeline_id: Option<String>,
     local_timeline_id: Option<String>,
@@ -100,15 +94,9 @@ impl ServerCxn {
             recv_thr: ThrResource::Offline(outlet_tx),
             send_thr: ThrResource::Offline((inlet_rx, None)),
 
-            received_messages: Arc::new(Mutex::new(SubjectMut::new())),
-
             home_timeline_id: None,
             local_timeline_id: None,
         }
-    }
-
-    pub fn host(&self) -> &Host {
-        &self.host
     }
 
     pub async fn spawn(&mut self) -> Result<(), ServerCxnError> {
@@ -119,7 +107,6 @@ impl ServerCxn {
             .map_err(|_| ServerCxnError::ConnectError)?;
         let (mut ws_tx, mut ws_rs) = ws.split();
 
-        let received_messages = self.received_messages.clone();
         self.recv_thr.into_online(|outlet_rx| async move {
             while let Some(Ok(m)) = ws_rs.next().await {
                 match m {
@@ -140,7 +127,7 @@ impl ServerCxn {
                         };
                         debug!("{m:?}");
 
-                        received_messages.lock().await.next(m).await;
+                        outlet_rx.send(m).expect("mpsc error");
                     }
                     Message::Ping(_) => {}
                     m => debug!("{m:?}"),
@@ -206,15 +193,11 @@ impl ServerCxn {
         self.inlet.send(message).unwrap()
     }
 
-    pub async fn subscribe<F, R>(&mut self, mut callback: F)
-    where
-        F: (FnMut(WsMsg) -> R) + Send + 'static,
-        R: Future<Output = ()> + Send + 'static,
-    {
-        self.received_messages
-            .lock()
-            .await
-            .subscribe(callback)
-            .await;
+    pub async fn recv(&mut self) -> Option<WsMsg> {
+        self.outlet.recv().await
+    }
+
+    pub fn try_recv(&mut self) -> Result<WsMsg, TryRecvError> {
+        self.outlet.try_recv()
     }
 }

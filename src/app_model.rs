@@ -7,7 +7,7 @@ use std::{
 };
 
 use serde_json::json;
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc::error::TryRecvError, RwLock};
 use tracing::warn;
 
 use crate::{
@@ -22,6 +22,15 @@ pub struct AppModel {
     pub merged_timeline: Arc<RwLock<MergedTimeline>>,
     pub server_cxn_store: HashMap<Host, Arc<RwLock<ServerCxn>>>,
     pub branches: Vec<Branch>,
+}
+
+#[derive(Debug)]
+pub struct WsPoller {
+    merged_timeline: Arc<RwLock<MergedTimeline>>,
+    server_cxn: Arc<RwLock<ServerCxn>>,
+    host: Host,
+    home_timeline_id: String,
+    local_timeline_id: String,
 }
 
 impl AppModel {
@@ -61,55 +70,19 @@ impl AppModel {
             timeline: BranchTimeline::Local,
         });
 
-        let tl = self.merged_timeline.clone();
-        let host1 = host.clone();
-
-        async fn f(
-            tl: Arc<RwLock<MergedTimeline>>,
-            home_timeline_id: String,
-            local_timeline_id: String,
-            host: Host,
-            m: WsMsg,
-        ) {
-            match m {
-                WsMsg::Channel(WsMsgChannelBody::Note { id, body }) => {
-                    let branch = if id == home_timeline_id {
-                        Branch {
-                            host: host.clone(),
-                            timeline: BranchTimeline::Home,
-                        }
-                    } else if id == local_timeline_id {
-                        Branch {
-                            host: host.clone(),
-                            timeline: BranchTimeline::Local,
-                        }
-                    } else {
-                        warn!("unknown connection id");
-                        return;
-                    };
-
-                    let mut tl = tl.write().await;
-                    tl.insert(host.clone(), HashSet::from([branch]), body)
-                        .await
-                        .expect("TODO: handle error");
-                }
-            }
-        }
-
-        cxn.subscribe(move |m| {
-            f(
-                tl.clone(),
-                home_timeline_id.clone(),
-                local_timeline_id.clone(),
-                host1.clone(),
-                m,
-            )
-        })
-        .await;
         cxn.spawn().await.expect("TODO: handle error");
 
-        self.server_cxn_store
-            .insert(host.clone(), Arc::new(RwLock::new(cxn)));
+        let cxn = Arc::new(RwLock::new(cxn));
+        let poller = WsPoller {
+            merged_timeline: self.merged_timeline.clone(),
+            server_cxn: cxn.clone(),
+            host: host.clone(),
+            home_timeline_id,
+            local_timeline_id,
+        };
+        tokio::spawn(poller.poll());
+
+        self.server_cxn_store.insert(host.clone(), cxn);
 
         match fetch_home_notes(host, api_key).await {
             Ok(notes) => {
@@ -149,6 +122,47 @@ impl AppModel {
             }
             Err(e) => {
                 tracing::error!("failed to fetch notes: {e}");
+            }
+        }
+    }
+}
+
+impl WsPoller {
+    async fn poll(self) {
+        loop {
+            let m = match self.server_cxn.write().await.try_recv() {
+                Ok(m) => m,
+                Err(TryRecvError::Disconnected) => break,
+                Err(TryRecvError::Empty) => {
+                    tokio::task::yield_now().await;
+                    continue;
+                }
+            };
+
+            match m {
+                WsMsg::Channel(WsMsgChannelBody::Note { id, body }) => {
+                    let branch = if id == self.home_timeline_id {
+                        Branch {
+                            host: self.host.clone(),
+                            timeline: BranchTimeline::Home,
+                        }
+                    } else if id == self.local_timeline_id {
+                        Branch {
+                            host: self.host.clone(),
+                            timeline: BranchTimeline::Local,
+                        }
+                    } else {
+                        warn!("unknown connection id");
+                        return;
+                    };
+
+                    self.merged_timeline
+                        .write()
+                        .await
+                        .insert(self.host.clone(), HashSet::from([branch]), body)
+                        .await
+                        .expect("TODO: handle error");
+                }
             }
         }
     }
