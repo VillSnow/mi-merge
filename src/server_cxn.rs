@@ -189,6 +189,18 @@ impl ServerCxn {
         local_timeline_id
     }
 
+    pub fn subscribe_note(&mut self, note_id: &str) {
+        self.send(
+            json!({
+                "type": "subNote",
+                "body": {
+                    "id": note_id
+                }
+            })
+            .to_string(),
+        );
+    }
+
     pub fn send(&self, message: String) {
         self.inlet.send(message).unwrap()
     }

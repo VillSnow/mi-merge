@@ -11,6 +11,7 @@ pub struct DynNoteModel {
     pub uri: String,
     pub note: Note,
 
+    pub reactions: Vec<(String, i32)>,
     pub branches: HashSet<Branch>,
 }
 
@@ -33,6 +34,7 @@ impl DynNoteModel {
             source_host,
             uri,
             note: ws_model,
+            reactions: Vec::new(),
             branches: HashSet::new(),
         }
     }

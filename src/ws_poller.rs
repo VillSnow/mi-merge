@@ -5,7 +5,7 @@ use tracing::warn;
 
 use crate::{
     common_types::{Branch, BranchTimeline, Host, NoteModel},
-    entries::{WsMsg, WsMsgChannelBody},
+    entries::{NoteUpdatedBody, WsMsg, WsMsgChannelBody},
     server_cxn::ServerCxn,
     server_note_repo::ServerNoteRepo,
 };
@@ -32,13 +32,15 @@ impl WsPoller {
             };
 
             match m {
-                WsMsg::Channel(WsMsgChannelBody::Note { id, body }) => {
-                    let branch = if id == self.home_timeline_id {
+                WsMsg::Channel(WsMsgChannelBody::Note { id: ch_id, body }) => {
+                    let note_id = body.id.clone();
+
+                    let branch = if ch_id == self.home_timeline_id {
                         Branch {
                             host: self.host.clone(),
                             timeline: BranchTimeline::Home,
                         }
-                    } else if id == self.local_timeline_id {
+                    } else if ch_id == self.local_timeline_id {
                         Branch {
                             host: self.host.clone(),
                             timeline: BranchTimeline::Local,
@@ -57,6 +59,17 @@ impl WsPoller {
                         )
                         .await
                         .expect("TODO: handle error");
+
+                    self.cxn.write().await.subscribe_note(&note_id);
+                }
+                WsMsg::NoteUpdated(NoteUpdatedBody::NoteUpdatedBodyReacted {
+                    id: note_id,
+                    body,
+                }) => {
+                    self.timeline
+                        .write()
+                        .await
+                        .incr_reaction(&note_id, &body.reaction);
                 }
             }
         }

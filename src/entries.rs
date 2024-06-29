@@ -202,6 +202,12 @@ pub struct PollChoice {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct EmojiSimple {
+    pub name: String,
+    pub url: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Emoji {
     pub id: String,
 
@@ -229,14 +235,38 @@ pub struct Emoji {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "body")]
+#[non_exhaustive]
 pub enum WsMsg {
     #[serde(rename = "channel")]
     Channel(WsMsgChannelBody),
+    #[serde(rename = "noteUpdated")]
+    NoteUpdated(NoteUpdatedBody),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
+#[non_exhaustive]
 pub enum WsMsgChannelBody {
     #[serde(rename = "note")]
     Note { id: String, body: Note },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum NoteUpdatedBody {
+    #[serde(rename = "reacted")]
+    NoteUpdatedBodyReacted {
+        id: String,
+        body: NoteUpdatedBodyReactedBody,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NoteUpdatedBodyReactedBody {
+    pub emoji: Option<EmojiSimple>,
+
+    pub reaction: String,
+
+    #[serde(rename = "userId")]
+    pub user_id: String,
 }

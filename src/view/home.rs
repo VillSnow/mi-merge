@@ -29,6 +29,9 @@ pub struct NoteProps {
     text: String,
 
     #[props(into)]
+    reactions: Vec<(String, i32)>,
+
+    #[props(into)]
     branch_fragments: Vec<BranchFragment>,
 }
 
@@ -86,6 +89,7 @@ pub fn Home() -> Element {
                         x.note.created_at, x.note.visibility, x.note.local_only
                     ),
                     text: x.note.text.unwrap_or("".to_owned()),
+                    reactions: x.reactions.clone(),
                     branch_fragments: branches
                         .iter()
                         .enumerate()
@@ -131,6 +135,7 @@ pub fn Column(props: ColumnProps) -> Element {
                         user_name: &note.user_name,
                         note_info: &note.note_info,
                         text: &note.text,
+                        reactions: note.reactions.clone(),
                         branch_fragments: note.branch_fragments.clone()
                     }
                 }
@@ -251,6 +256,11 @@ pub fn Note(props: NoteProps) -> Element {
             }
             div { class: "body",
                 span { {body} }
+            }
+            div { class: "reactions",
+                for (r , n) in props.reactions {
+                    div { "{r} {n}" }
+                }
             }
         }
     }
