@@ -1,29 +1,17 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     error::Error,
-    ops::Deref,
-    str::FromStr,
+    ops::DerefMut,
     sync::Arc,
     time::{Duration, Instant},
 };
 
-use chrono::{DateTime, Utc};
 use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     RwLock,
 };
 
-use crate::{
-    common_types::{Branch, Host, NoteEntry},
-    entries::Note,
-};
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct NoteKey {
-    pub created_at: DateTime<Utc>,
-    pub host: Host,
-    pub uri: String,
-}
+use crate::common_types::{DynNoteModel, MiMergeError, NoteKey};
 
 #[derive(Debug)]
 pub enum MergedTimeLineError {
@@ -42,37 +30,17 @@ impl std::fmt::Display for MergedTimeLineError {
 
 impl Error for MergedTimeLineError {}
 
-#[derive(Debug, Default)]
-pub struct MergedTimeline {
-    column: VecDeque<Arc<RwLock<NoteEntry>>>,
-    dictionary: HashMap<NoteKey, Arc<RwLock<NoteEntry>>>,
-    column_senders: Vec<UnboundedSender<Vec<NoteEntry>>>,
+#[derive(Debug)]
+struct ColumnEntry {
+    dyn_note_model: Arc<RwLock<DynNoteModel>>,
+    inserted_at: Instant,
 }
 
-impl NoteKey {
-    fn from_note(host: &Host, note: &Note) -> Result<NoteKey, MergedTimeLineError> {
-        let note_host = note
-            .user
-            .host
-            .as_ref()
-            .map(|s| Host::from(s.clone()))
-            .unwrap_or(host.clone());
-
-        let uri = if &note_host == host {
-            format!("https://{}/notes/{}", host, note.id)
-        } else {
-            note.uri
-                .as_ref()
-                .ok_or(MergedTimeLineError::InvalidNote)?
-                .clone()
-        };
-        Ok(NoteKey {
-            created_at: DateTime::from_str(&note.created_at)
-                .map_err(|_| MergedTimeLineError::InvalidNote)?,
-            host: note_host.clone(),
-            uri,
-        })
-    }
+#[derive(Debug, Default)]
+pub struct MergedTimeline {
+    column: VecDeque<ColumnEntry>,
+    dictionary: HashMap<NoteKey, Arc<RwLock<DynNoteModel>>>,
+    column_senders: Vec<UnboundedSender<Vec<DynNoteModel>>>,
 }
 
 impl MergedTimeline {
@@ -80,70 +48,80 @@ impl MergedTimeline {
         Self::default()
     }
 
-    pub async fn insert(
-        &mut self,
-        host: Host,
-        branches: HashSet<Branch>,
-        note: Note,
-    ) -> Result<(), MergedTimeLineError> {
+    pub async fn upsert(&mut self, mut incoming: DynNoteModel) -> Result<(), MiMergeError> {
         use std::collections::hash_map::Entry::{Occupied, Vacant};
 
-        let key = NoteKey::from_note(&host, &note)?;
-        let note_host = key.host.clone();
-        let note_uri = key.uri.clone();
+        let key = NoteKey {
+            uri: incoming.uri.clone(),
+        };
 
         match self.dictionary.entry(key) {
-            Occupied(dict_entry) => {
-                let mut entry = dict_entry.get().write().await;
-                if dict_entry.key().host == host {
-                    entry.note = note.clone();
+            Occupied(current) => {
+                let mut current = current.get().write().await;
+
+                // 次の優先順位で `self.dictionary` に格納する。
+                // 1. ソースホストとオリジナルホストが同じもの。
+                // 2. 新しく来たもの。
+                if current.source_host != current.original_host
+                    || incoming.source_host == incoming.original_host
+                {
+                    std::mem::swap(current.deref_mut(), &mut incoming);
                 }
-                entry.branches.extend(branches.clone().into_iter());
+
+                current.branches.extend(incoming.branches.into_iter());
             }
-            Vacant(dict_entry) => {
+            Vacant(entry) => {
                 let now = Instant::now();
 
-                let inserting_created_at = note.created_at.clone();
-                let entry = Arc::new(RwLock::new(NoteEntry {
-                    host: note_host,
-                    uri: note_uri,
-                    note,
-                    branches,
-                    inserted_at: now.clone(),
-                }));
-
-                let sort_limit_dur = Duration::from_millis(500);
-
-                let mut n = self.column.len();
-                for i in 0..self.column.len() {
-                    let exists = self.column[i].read().await;
-                    if inserting_created_at >= exists.note.created_at
-                        || now.duration_since(exists.inserted_at) > sort_limit_dur
-                    {
-                        n = i;
-                        break;
-                    }
-                }
-                self.column.insert(n, entry.clone());
-
-                dict_entry.insert(entry);
+                let incoming = Arc::new(RwLock::new(incoming));
+                entry.insert(incoming.clone());
+                insert_into_column(&mut self.column, incoming.clone(), now).await;
             }
+        };
+
+        let mut sending_item = Vec::new();
+        for x in &self.column {
+            sending_item.push(x.dyn_note_model.read().await.clone());
         }
 
-        let mut next_value = Vec::new();
-        for x in &self.column {
-            next_value.push(x.read().await.deref().clone());
-        }
-        for tx in &self.column_senders {
-            tx.send(next_value.clone()).expect("mpsc error");
+        for sender in &self.column_senders {
+            sender.send(sending_item.clone()).expect("mpsc error");
         }
 
         Ok(())
     }
 
-    pub fn make_column_receiver(&mut self) -> UnboundedReceiver<Vec<NoteEntry>> {
+    pub fn make_column_receiver(&mut self) -> UnboundedReceiver<Vec<DynNoteModel>> {
         let (tx, rx) = unbounded_channel();
         self.column_senders.push(tx);
         rx
     }
+}
+
+async fn insert_into_column(
+    column: &mut VecDeque<ColumnEntry>,
+    incoming: Arc<RwLock<DynNoteModel>>,
+    now: Instant,
+) {
+    let sort_limit_dur = Duration::from_millis(500);
+
+    let inserting_created_at = incoming.read().await.note.created_at.clone();
+
+    let mut n = 0;
+    for i in 0..column.len() {
+        let exists = column[i].dyn_note_model.read().await;
+        if inserting_created_at >= exists.note.created_at
+            || now.duration_since(column[i].inserted_at) > sort_limit_dur
+        {
+            n = i;
+            break;
+        }
+    }
+    column.insert(
+        n,
+        ColumnEntry {
+            dyn_note_model: incoming,
+            inserted_at: now,
+        },
+    );
 }

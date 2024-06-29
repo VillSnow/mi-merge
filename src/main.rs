@@ -7,6 +7,7 @@ mod global_state;
 mod merged_timeline;
 mod mfm;
 mod server_cxn;
+mod server_note_repo;
 mod view;
 
 use dioxus::{desktop::use_window, prelude::*};

@@ -11,7 +11,7 @@ use crate::{
 #[derive(Clone, PartialEq, Eq, Props)]
 pub struct NoteProps {
     #[props(into)]
-    host: Host,
+    original_host: Host,
 
     #[props(into)]
     uri: String,
@@ -77,7 +77,7 @@ pub fn Home() -> Element {
 
             for x in model_notes {
                 notes_prop.push(NoteProps {
-                    host: x.host,
+                    original_host: x.original_host,
                     uri: x.uri,
                     avatar_url: x.note.user.avatar_url,
                     user_name: x.note.user.name.unwrap_or(x.note.user.username),
@@ -125,7 +125,7 @@ pub fn Column(props: ColumnProps) -> Element {
             for note in props.notes.read().deref() {
                 article { key: "{note.uri}",
                     Note {
-                        host: note.host.clone(),
+                        original_host: note.original_host.clone(),
                         uri: &note.uri,
                         avatar_url: &note.avatar_url,
                         user_name: &note.user_name,
@@ -145,7 +145,7 @@ pub fn Note(props: NoteProps) -> Element {
     let username = decomposed.into_iter().map(|x| match x {
         crate::mfm::DecomposedTextItem::Text(x) => rsx! { "{x}" },
         crate::mfm::DecomposedTextItem::Emoji(x) => rsx! {
-            Emoji { host: props.host.clone(), name: x }
+            Emoji { host: props.original_host.clone(), name: x }
         },
     });
 
@@ -153,7 +153,7 @@ pub fn Note(props: NoteProps) -> Element {
     let body = decomposed.into_iter().map(|x| match x {
         crate::mfm::DecomposedTextItem::Text(x) => rsx! { "{x}" },
         crate::mfm::DecomposedTextItem::Emoji(x) => rsx! {
-            Emoji { host: props.host.clone(), name: x }
+            Emoji { host: props.original_host.clone(), name: x }
         },
     });
     let branches = props.branch_fragments.iter().map(|x| {

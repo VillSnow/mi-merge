@@ -1,43 +1,46 @@
-use std::{
-    collections::{HashMap, HashSet},
-    error::Error,
-    fs::File,
-    io::BufReader,
-    sync::Arc,
-};
+use std::{collections::HashSet, error::Error, fs::File, io::BufReader, sync::Arc};
 
 use serde_json::json;
-use tokio::sync::{mpsc::error::TryRecvError, RwLock};
+use tokio::sync::{
+    mpsc::{error::TryRecvError, UnboundedReceiver},
+    RwLock,
+};
 use tracing::warn;
 
 use crate::{
-    common_types::{Branch, BranchTimeline, Credential, Host},
+    common_types::{Branch, BranchTimeline, Credential, DynNoteModel, Host, NoteModel},
     entries::{Note, WsMsg, WsMsgChannelBody},
     merged_timeline::MergedTimeline,
     server_cxn::ServerCxn,
+    server_note_repo::ServerNoteRepo,
 };
 
 #[derive(Debug)]
 pub struct AppModel {
     pub merged_timeline: Arc<RwLock<MergedTimeline>>,
-    pub server_cxn_store: HashMap<Host, Arc<RwLock<ServerCxn>>>,
+
     pub branches: Vec<Branch>,
 }
 
 #[derive(Debug)]
 pub struct WsPoller {
-    merged_timeline: Arc<RwLock<MergedTimeline>>,
-    server_cxn: Arc<RwLock<ServerCxn>>,
+    timeline: Arc<RwLock<ServerNoteRepo>>,
+    cxn: Arc<RwLock<ServerCxn>>,
     host: Host,
     home_timeline_id: String,
     local_timeline_id: String,
+}
+
+#[derive(Debug)]
+pub struct TimelineMerger {
+    merged_timeline: Arc<RwLock<MergedTimeline>>,
+    receiver: UnboundedReceiver<DynNoteModel>,
 }
 
 impl AppModel {
     pub fn new() -> Self {
         Self {
             merged_timeline: Arc::new(RwLock::new(MergedTimeline::new())),
-            server_cxn_store: Default::default(),
             branches: Vec::new(),
         }
     }
@@ -54,8 +57,6 @@ impl AppModel {
     }
 
     pub async fn connect(&mut self, host: &Host, api_key: &str) {
-        assert!(!self.server_cxn_store.contains_key(host));
-
         let mut cxn = ServerCxn::new(host.clone(), api_key.to_owned());
 
         let home_timeline_id = cxn.connect_to_home();
@@ -72,32 +73,39 @@ impl AppModel {
 
         cxn.spawn().await.expect("TODO: handle error");
 
+        let mut timeline = ServerNoteRepo::new();
+        let receiver = timeline.make_updated_note_receiver();
+
         let cxn = Arc::new(RwLock::new(cxn));
+        let timeline = Arc::new(RwLock::new(timeline));
+
         let poller = WsPoller {
-            merged_timeline: self.merged_timeline.clone(),
-            server_cxn: cxn.clone(),
+            timeline: timeline.clone(),
+            cxn: cxn.clone(),
             host: host.clone(),
             home_timeline_id,
             local_timeline_id,
         };
         tokio::spawn(poller.poll());
 
-        self.server_cxn_store.insert(host.clone(), cxn);
+        let merger = TimelineMerger {
+            merged_timeline: self.merged_timeline.clone(),
+            receiver,
+        };
+        tokio::spawn(merger.merge());
 
         match fetch_home_notes(host, api_key).await {
             Ok(notes) => {
                 let mut tl = self.merged_timeline.write().await;
+                let branch = Branch {
+                    host: host.clone(),
+                    timeline: BranchTimeline::Home,
+                };
+
                 for note in notes.into_iter().rev() {
-                    tl.insert(
-                        host.clone(),
-                        HashSet::from([Branch {
-                            host: host.clone(),
-                            timeline: BranchTimeline::Home,
-                        }]),
-                        note,
-                    )
-                    .await
-                    .expect("TODO: handle error");
+                    let mut dyn_model = DynNoteModel::from_ws_entity(note, host.clone());
+                    dyn_model.branches.extend([branch.clone()]);
+                    tl.upsert(dyn_model).await.expect("TODO: handle error");
                 }
             }
             Err(e) => {
@@ -107,17 +115,15 @@ impl AppModel {
         match fetch_local_notes(host, api_key).await {
             Ok(notes) => {
                 let mut tl = self.merged_timeline.write().await;
+                let branch = Branch {
+                    host: host.clone(),
+                    timeline: BranchTimeline::Local,
+                };
+
                 for note in notes.into_iter().rev() {
-                    tl.insert(
-                        host.clone(),
-                        HashSet::from([Branch {
-                            host: host.clone(),
-                            timeline: BranchTimeline::Local,
-                        }]),
-                        note,
-                    )
-                    .await
-                    .expect("TODO: handle error");
+                    let mut dyn_model = DynNoteModel::from_ws_entity(note, host.clone());
+                    dyn_model.branches.extend([branch.clone()]);
+                    tl.upsert(dyn_model).await.expect("TODO: handle error");
                 }
             }
             Err(e) => {
@@ -130,7 +136,7 @@ impl AppModel {
 impl WsPoller {
     async fn poll(self) {
         loop {
-            let m = match self.server_cxn.write().await.try_recv() {
+            let m = match self.cxn.write().await.try_recv() {
                 Ok(m) => m,
                 Err(TryRecvError::Disconnected) => break,
                 Err(TryRecvError::Empty) => {
@@ -156,14 +162,30 @@ impl WsPoller {
                         return;
                     };
 
-                    self.merged_timeline
+                    self.timeline
                         .write()
                         .await
-                        .insert(self.host.clone(), HashSet::from([branch]), body)
+                        .upsert(
+                            NoteModel::from_ws_model(body, self.host.clone()),
+                            HashSet::from([branch]),
+                        )
                         .await
                         .expect("TODO: handle error");
                 }
             }
+        }
+    }
+}
+
+impl TimelineMerger {
+    async fn merge(mut self) {
+        while let Some(note) = self.receiver.recv().await {
+            self.merged_timeline
+                .write()
+                .await
+                .upsert(note)
+                .await
+                .expect("TODO: handle error");
         }
     }
 }
