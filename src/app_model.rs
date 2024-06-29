@@ -1,18 +1,15 @@
-use std::{collections::HashSet, error::Error, fs::File, io::BufReader, sync::Arc};
+use std::{error::Error, fs::File, io::BufReader, sync::Arc};
 
 use serde_json::json;
-use tokio::sync::{
-    mpsc::{error::TryRecvError, UnboundedReceiver},
-    RwLock,
-};
-use tracing::warn;
+use tokio::sync::{mpsc::UnboundedReceiver, RwLock};
 
 use crate::{
-    common_types::{Branch, BranchTimeline, Credential, DynNoteModel, Host, NoteModel},
-    entries::{Note, WsMsg, WsMsgChannelBody},
+    common_types::{Branch, BranchTimeline, Credential, DynNoteModel, Host},
+    entries::Note,
     merged_timeline::MergedTimeline,
     server_cxn::ServerCxn,
     server_note_repo::ServerNoteRepo,
+    ws_poller::WsPoller,
 };
 
 #[derive(Debug)]
@@ -20,15 +17,6 @@ pub struct AppModel {
     pub merged_timeline: Arc<RwLock<MergedTimeline>>,
 
     pub branches: Vec<Branch>,
-}
-
-#[derive(Debug)]
-pub struct WsPoller {
-    timeline: Arc<RwLock<ServerNoteRepo>>,
-    cxn: Arc<RwLock<ServerCxn>>,
-    host: Host,
-    home_timeline_id: String,
-    local_timeline_id: String,
 }
 
 #[derive(Debug)]
@@ -128,50 +116,6 @@ impl AppModel {
             }
             Err(e) => {
                 tracing::error!("failed to fetch notes: {e}");
-            }
-        }
-    }
-}
-
-impl WsPoller {
-    async fn poll(self) {
-        loop {
-            let m = match self.cxn.write().await.try_recv() {
-                Ok(m) => m,
-                Err(TryRecvError::Disconnected) => break,
-                Err(TryRecvError::Empty) => {
-                    tokio::task::yield_now().await;
-                    continue;
-                }
-            };
-
-            match m {
-                WsMsg::Channel(WsMsgChannelBody::Note { id, body }) => {
-                    let branch = if id == self.home_timeline_id {
-                        Branch {
-                            host: self.host.clone(),
-                            timeline: BranchTimeline::Home,
-                        }
-                    } else if id == self.local_timeline_id {
-                        Branch {
-                            host: self.host.clone(),
-                            timeline: BranchTimeline::Local,
-                        }
-                    } else {
-                        warn!("unknown connection id");
-                        return;
-                    };
-
-                    self.timeline
-                        .write()
-                        .await
-                        .upsert(
-                            NoteModel::from_ws_model(body, self.host.clone()),
-                            HashSet::from([branch]),
-                        )
-                        .await
-                        .expect("TODO: handle error");
-                }
             }
         }
     }

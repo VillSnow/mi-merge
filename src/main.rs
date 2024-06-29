@@ -9,6 +9,7 @@ mod mfm;
 mod server_cxn;
 mod server_note_repo;
 mod view;
+mod ws_poller;
 
 use dioxus::{desktop::use_window, prelude::*};
 
