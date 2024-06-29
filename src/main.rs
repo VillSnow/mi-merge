@@ -2,7 +2,7 @@ mod app_model;
 mod cached_req;
 mod common_types;
 mod emoji_service;
-mod entries;
+mod mi_models;
 mod global_state;
 mod merged_timeline;
 mod mfm;

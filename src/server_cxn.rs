@@ -14,7 +14,7 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
-use crate::{common_types::Host, entries::WsMsg};
+use crate::{common_types::Host, mi_models::WsMsg};
 
 #[derive(Debug)]
 pub enum ServerCxnError {

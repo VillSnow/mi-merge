@@ -4,8 +4,8 @@ use tokio::sync::{mpsc::error::TryRecvError, RwLock};
 use tracing::warn;
 
 use crate::{
-    common_types::{Branch, BranchTimeline, Host, NoteModel},
-    entries::{NoteUpdatedBody, WsMsg, WsMsgChannelBody},
+    common_types::{BranchKey, BranchTimeline, Host, NoteModel},
+    mi_models::{NoteUpdatedBody, WsMsg, WsMsgChannelBody},
     server_cxn::ServerCxn,
     server_note_repo::ServerNoteRepo,
 };
@@ -36,12 +36,12 @@ impl WsPoller {
                     let note_id = body.id.clone();
 
                     let branch = if ch_id == self.home_timeline_id {
-                        Branch {
+                        BranchKey {
                             host: self.host.clone(),
                             timeline: BranchTimeline::Home,
                         }
                     } else if ch_id == self.local_timeline_id {
-                        Branch {
+                        BranchKey {
                             host: self.host.clone(),
                             timeline: BranchTimeline::Local,
                         }
@@ -54,10 +54,9 @@ impl WsPoller {
                         .write()
                         .await
                         .upsert(
-                            NoteModel::from_ws_model(body, self.host.clone()),
+                            NoteModel::from_mi_model(body, self.host.clone()),
                             HashSet::from([branch]),
                         )
-                        .await
                         .expect("TODO: handle error");
 
                     self.cxn.write().await.subscribe_note(&note_id);

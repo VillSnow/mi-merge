@@ -3,7 +3,7 @@ use std::error::Error;
 use fancy_regex::Regex;
 use serde_json::json;
 
-use crate::{common_types::Host, entries::Emoji};
+use crate::{common_types::Host, mi_models::Emoji};
 
 pub enum DecomposedTextItem<'a> {
     Text(&'a str),

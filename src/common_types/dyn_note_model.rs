@@ -1,41 +1,32 @@
 use std::collections::HashSet;
 
-use crate::entries::Note;
+use crate::mi_models::Note;
 
-use super::{Branch, Host};
+use super::{BranchKey, Host, NoteModel};
 
 #[derive(Debug, Clone)]
 pub struct DynNoteModel {
     pub original_host: Host,
     pub source_host: Host,
     pub uri: String,
-    pub note: Note,
+    pub mi_note: Note,
 
     pub reactions: Vec<(String, i32)>,
-    pub branches: HashSet<Branch>,
+    pub branches: HashSet<BranchKey>,
 }
 
 impl DynNoteModel {
-    pub fn from_ws_entity(ws_model: Note, source_host: Host) -> Self {
-        let original_host = ws_model
-            .user
-            .host
-            .clone()
-            .map(Host::from)
-            .unwrap_or(source_host.clone());
-
-        let uri = ws_model
-            .uri
-            .clone()
-            .unwrap_or(format!("https://{}/notes/{}", source_host, ws_model.id));
-
+    pub fn from_model(global_note: NoteModel) -> Self {
         Self {
-            original_host,
-            source_host,
-            uri,
-            note: ws_model,
-            reactions: Vec::new(),
-            branches: HashSet::new(),
+            original_host: global_note.original_host,
+            source_host: global_note.source_host,
+            uri: global_note.uri,
+            mi_note: global_note.mi_note,
+            reactions: Default::default(),
+            branches: Default::default(),
         }
+    }
+    pub fn from_mi_model(mi_note: Note, source_host: Host) -> Self {
+        Self::from_model(NoteModel::from_mi_model(mi_note, source_host))
     }
 }

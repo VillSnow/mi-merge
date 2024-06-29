@@ -2,7 +2,7 @@ use std::{collections::HashMap, error::Error};
 
 use serde_json::json;
 
-use crate::{common_types::Host, entries::Emoji};
+use crate::{common_types::Host, mi_models::Emoji};
 
 #[derive(Debug, Clone, Default)]
 pub struct EmojiService {

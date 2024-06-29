@@ -1,4 +1,4 @@
-use crate::entries::Note;
+use crate::mi_models::Note;
 
 use super::Host;
 
@@ -7,28 +7,28 @@ pub struct NoteModel {
     pub original_host: Host,
     pub source_host: Host,
     pub uri: String,
-    pub note: Note,
+    pub mi_note: Note,
 }
 
 impl NoteModel {
-    pub fn from_ws_model(ws_note: Note, source_host: Host) -> Self {
-        let original_host = ws_note
+    pub fn from_mi_model(mi_note: Note, source_host: Host) -> Self {
+        let original_host = mi_note
             .user
             .host
             .clone()
             .map(Host::from)
             .unwrap_or(source_host.clone());
 
-        let uri = ws_note
+        let uri = mi_note
             .uri
             .clone()
-            .unwrap_or(format!("https://{}/notes/{}", source_host, ws_note.id));
+            .unwrap_or(format!("https://{}/notes/{}", source_host, mi_note.id));
 
         Self {
             original_host,
             source_host,
             uri,
-            note: ws_note,
+            mi_note,
         }
     }
 }

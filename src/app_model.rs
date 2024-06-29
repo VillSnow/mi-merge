@@ -4,9 +4,9 @@ use serde_json::json;
 use tokio::sync::{mpsc::UnboundedReceiver, RwLock};
 
 use crate::{
-    common_types::{Branch, BranchTimeline, Credential, DynNoteModel, Host},
-    entries::Note,
+    common_types::{BranchKey, BranchTimeline, Credential, DynNoteModel, Host},
     merged_timeline::MergedTimeline,
+    mi_models::Note,
     server_cxn::ServerCxn,
     server_note_repo::ServerNoteRepo,
     ws_poller::WsPoller,
@@ -16,7 +16,7 @@ use crate::{
 pub struct AppModel {
     pub merged_timeline: Arc<RwLock<MergedTimeline>>,
 
-    pub branches: Vec<Branch>,
+    pub branches: Vec<BranchKey>,
 }
 
 #[derive(Debug)]
@@ -48,13 +48,13 @@ impl AppModel {
         let mut cxn = ServerCxn::new(host.clone(), api_key.to_owned());
 
         let home_timeline_id = cxn.connect_to_home();
-        self.branches.push(Branch {
+        self.branches.push(BranchKey {
             host: host.clone(),
             timeline: BranchTimeline::Home,
         });
 
         let local_timeline_id = cxn.connect_to_local();
-        self.branches.push(Branch {
+        self.branches.push(BranchKey {
             host: host.clone(),
             timeline: BranchTimeline::Local,
         });
@@ -85,13 +85,13 @@ impl AppModel {
         match fetch_home_notes(host, api_key).await {
             Ok(notes) => {
                 let mut tl = self.merged_timeline.write().await;
-                let branch = Branch {
+                let branch = BranchKey {
                     host: host.clone(),
                     timeline: BranchTimeline::Home,
                 };
 
                 for note in notes.into_iter().rev() {
-                    let mut dyn_model = DynNoteModel::from_ws_entity(note, host.clone());
+                    let mut dyn_model = DynNoteModel::from_mi_model(note, host.clone());
                     dyn_model.branches.extend([branch.clone()]);
                     tl.upsert(dyn_model).await.expect("TODO: handle error");
                 }
@@ -103,13 +103,13 @@ impl AppModel {
         match fetch_local_notes(host, api_key).await {
             Ok(notes) => {
                 let mut tl = self.merged_timeline.write().await;
-                let branch = Branch {
+                let branch = BranchKey {
                     host: host.clone(),
                     timeline: BranchTimeline::Local,
                 };
 
                 for note in notes.into_iter().rev() {
-                    let mut dyn_model = DynNoteModel::from_ws_entity(note, host.clone());
+                    let mut dyn_model = DynNoteModel::from_mi_model(note, host.clone());
                     dyn_model.branches.extend([branch.clone()]);
                     tl.upsert(dyn_model).await.expect("TODO: handle error");
                 }

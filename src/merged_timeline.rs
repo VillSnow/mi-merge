@@ -11,7 +11,7 @@ use tokio::sync::{
     RwLock,
 };
 
-use crate::common_types::{DynNoteModel, MiMergeError, NoteKey};
+use crate::common_types::{DynNoteModel, MiMergeError};
 
 #[derive(Debug)]
 pub enum MergedTimeLineError {
@@ -39,7 +39,7 @@ struct ColumnEntry {
 #[derive(Debug, Default)]
 pub struct MergedTimeline {
     column: VecDeque<ColumnEntry>,
-    dictionary: HashMap<NoteKey, Arc<RwLock<DynNoteModel>>>,
+    dictionary: HashMap<String, Arc<RwLock<DynNoteModel>>>,
     column_senders: Vec<UnboundedSender<Vec<DynNoteModel>>>,
 }
 
@@ -51,11 +51,9 @@ impl MergedTimeline {
     pub async fn upsert(&mut self, mut incoming: DynNoteModel) -> Result<(), MiMergeError> {
         use std::collections::hash_map::Entry::{Occupied, Vacant};
 
-        let key = NoteKey {
-            uri: incoming.uri.clone(),
-        };
+        let uri = incoming.uri.clone();
 
-        match self.dictionary.entry(key) {
+        match self.dictionary.entry(uri) {
             Occupied(current) => {
                 let mut current = current.get().write().await;
 
@@ -105,12 +103,12 @@ async fn insert_into_column(
 ) {
     let sort_limit_dur = Duration::from_millis(500);
 
-    let inserting_created_at = incoming.read().await.note.created_at.clone();
+    let inserting_created_at = incoming.read().await.mi_note.created_at.clone();
 
     let mut n = 0;
     for i in 0..column.len() {
-        let exists = column[i].dyn_note_model.read().await;
-        if inserting_created_at >= exists.note.created_at
+        let current = column[i].dyn_note_model.read().await;
+        if inserting_created_at >= current.mi_note.created_at
             || now.duration_since(column[i].inserted_at) > sort_limit_dur
         {
             n = i;

@@ -3,12 +3,12 @@ use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tracing::warn;
 
-use crate::common_types::{Branch, DynNoteModel, MiMergeError, NoteModel};
+use crate::common_types::{BranchKey, DynNoteModel, MiMergeError, NoteModel};
 
 #[derive(Debug, Default)]
 pub struct ServerNoteRepo {
     notes: HashMap<String, NoteModel>,
-    branches: HashMap<String, HashSet<Branch>>,
+    branches: HashMap<String, HashSet<BranchKey>>,
     reactions: HashMap<String, HashMap<String, i32>>,
     senders: Vec<UnboundedSender<DynNoteModel>>,
 }
@@ -18,14 +18,14 @@ impl ServerNoteRepo {
         Self::default()
     }
 
-    pub async fn upsert(
+    pub fn upsert(
         &mut self,
-        entry: NoteModel,
-        branches: HashSet<Branch>,
+        note: NoteModel,
+        branches: HashSet<BranchKey>,
     ) -> Result<(), MiMergeError> {
-        let note_id = entry.note.id.clone();
+        let note_id = note.mi_note.id.clone();
 
-        self.notes.insert(note_id.clone(), entry.clone());
+        self.notes.insert(note_id.clone(), note.clone());
         self.branches
             .entry(note_id.clone())
             .or_default()
@@ -55,18 +55,16 @@ impl ServerNoteRepo {
             return;
         };
 
-        let dyn_model = DynNoteModel {
-            original_host: note.original_host.clone(),
-            source_host: note.source_host.clone(),
-            uri: note.uri.clone(),
-            note: note.note.clone(),
-            reactions: self
+        let mut dyn_model = DynNoteModel::from_model(note.clone());
+        if let Some(xs) = self.reactions.get(note_id) {
+            dyn_model
                 .reactions
-                .get(note_id)
-                .map(|xs| xs.iter().map(|(k, &v)| (k.clone(), v)).collect())
-                .unwrap_or_default(),
-            branches: self.branches.get(note_id).cloned().unwrap_or_default(),
-        };
+                .extend(xs.iter().map(|(k, &v)| (k.clone(), v)));
+        }
+        if let Some(xs) = self.branches.get(note_id) {
+            dyn_model.branches.extend(xs.iter().cloned());
+        }
+
         for tx in &self.senders {
             tx.send(dyn_model.clone()).expect("mpsc error");
         }

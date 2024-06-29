@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use tracing::{debug, error};
 
 use crate::{
-    common_types::{Branch, Host},
+    common_types::{BranchKey, Host},
     global_state::{get_app_model, get_decomposer},
 };
 
@@ -76,19 +76,19 @@ pub fn Home() -> Element {
 
         while let Some(model_notes) = rx.recv().await {
             let mut notes_prop = Vec::new();
-            let mut branch_trace = HashSet::<Branch>::new();
+            let mut branch_trace = HashSet::<BranchKey>::new();
 
             for x in model_notes {
                 notes_prop.push(NoteProps {
                     original_host: x.original_host,
                     uri: x.uri,
-                    avatar_url: x.note.user.avatar_url,
-                    user_name: x.note.user.name.unwrap_or(x.note.user.username),
+                    avatar_url: x.mi_note.user.avatar_url,
+                    user_name: x.mi_note.user.name.unwrap_or(x.mi_note.user.username),
                     note_info: format!(
                         "{} {:?} {:?}",
-                        x.note.created_at, x.note.visibility, x.note.local_only
+                        x.mi_note.created_at, x.mi_note.visibility, x.mi_note.local_only
                     ),
-                    text: x.note.text.unwrap_or("".to_owned()),
+                    text: x.mi_note.text.unwrap_or("".to_owned()),
                     reactions: x.reactions.clone(),
                     branch_fragments: branches
                         .iter()
