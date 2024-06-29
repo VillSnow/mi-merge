@@ -9,7 +9,7 @@ use crate::common_types::{BranchKey, DynNoteModel, MiMergeError, NoteModel};
 pub struct ServerNoteRepo {
     notes: HashMap<String, NoteModel>,
     branches: HashMap<String, HashSet<BranchKey>>,
-    reactions: HashMap<String, HashMap<String, i32>>,
+    reactions: HashMap<String, HashMap<String, i64>>,
     senders: Vec<UnboundedSender<DynNoteModel>>,
 }
 
@@ -26,6 +26,10 @@ impl ServerNoteRepo {
         let note_id = note.mi_note.id.clone();
 
         self.notes.insert(note_id.clone(), note.clone());
+        self.reactions
+            .entry(note_id.clone())
+            .or_default()
+            .extend(note.mi_note.reactions.iter().map(|(k, &v)| (k.clone(), v)));
         self.branches
             .entry(note_id.clone())
             .or_default()

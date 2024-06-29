@@ -11,7 +11,7 @@ pub struct DynNoteModel {
     pub uri: String,
     pub mi_note: Note,
 
-    pub reactions: Vec<(String, i32)>,
+    pub reactions: Vec<(String, i64)>,
     pub branches: HashSet<BranchKey>,
 }
 

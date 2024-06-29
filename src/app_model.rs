@@ -1,5 +1,6 @@
 use std::{collections::HashSet, error::Error, fs::File, io::BufReader, sync::Arc, time::Duration};
 
+use fancy_regex::Regex;
 use serde_json::json;
 use tokio::sync::{mpsc::UnboundedReceiver, RwLock};
 
@@ -22,6 +23,7 @@ pub struct AppModel {
 #[derive(Debug)]
 pub struct TimelineMerger {
     merged_timeline: Arc<RwLock<MergedTimeline>>,
+    host: Host,
     receiver: UnboundedReceiver<DynNoteModel>,
 }
 
@@ -79,22 +81,26 @@ impl AppModel {
 
         let merger = TimelineMerger {
             merged_timeline: self.merged_timeline.clone(),
+            host: host.clone(),
             receiver,
         };
         tokio::spawn(merger.merge());
 
         match fetch_home_notes(host, api_key).await {
             Ok(notes) => {
-                let mut tl = repo.write().await;
+                let mut cxn = cxn.write().await;
+                let mut repo = repo.write().await;
                 let branches = HashSet::from([BranchKey {
                     host: host.clone(),
                     timeline: BranchTimeline::Home,
                 }]);
 
                 for note in notes.into_iter().rev() {
+                    let note_id = note.id.clone();
                     let model = NoteModel::from_mi_model(note, host.clone());
-                    tl.upsert(model, branches.clone())
+                    repo.upsert(model, branches.clone())
                         .expect("TODO: handle error");
+                    cxn.subscribe_note(&note_id);
                 }
             }
             Err(e) => {
@@ -124,13 +130,37 @@ impl AppModel {
 
 impl TimelineMerger {
     async fn merge(mut self) {
-        while let Some(note) = self.receiver.recv().await {
+        while let Some(mut note) = self.receiver.recv().await {
+            for (r, _) in &mut note.reactions {
+                if let Some(qualified) = self.qualify_reaction(r) {
+                    *r = qualified;
+                }
+            }
+
             self.merged_timeline
                 .write()
                 .await
                 .upsert(note)
                 .await
                 .expect("TODO: handle error");
+        }
+    }
+
+    fn qualify_reaction(&self, reaction_name: &str) -> Option<String> {
+        let re = Regex::new("^:(.*)@(.*):$").unwrap();
+        match re.captures(&reaction_name).expect("regex error") {
+            Some(captures) => {
+                if captures.get(2).unwrap().as_str() == "." {
+                    return Some(format!(
+                        ":{}@{}:",
+                        captures.get(1).unwrap().as_str(),
+                        self.host
+                    ));
+                } else {
+                    return None;
+                }
+            }
+            None => None,
         }
     }
 }

@@ -1,6 +1,7 @@
 use std::{collections::HashSet, ops::Deref};
 
 use dioxus::prelude::*;
+use fancy_regex::Regex;
 use tracing::{debug, error};
 
 use crate::{
@@ -29,7 +30,7 @@ pub struct NoteProps {
     text: String,
 
     #[props(into)]
-    reactions: Vec<(String, i32)>,
+    reactions: Vec<(String, i64)>,
 
     #[props(into)]
     branch_fragments: Vec<BranchFragment>,
@@ -58,6 +59,12 @@ pub struct ColumnProps {
 pub struct EmojiProp {
     host: Host,
     name: String,
+}
+
+#[derive(Clone, PartialEq, Eq, Props)]
+pub struct ReactionProp {
+    name: String,
+    count: i64,
 }
 
 #[component]
@@ -259,7 +266,7 @@ pub fn Note(props: NoteProps) -> Element {
             }
             div { class: "reactions",
                 for (r , n) in props.reactions {
-                    div { "{r} {n}" }
+                    Reaction { name: r, count: n }
                 }
             }
         }
@@ -274,7 +281,7 @@ pub fn Emoji(props: EmojiProp) -> Element {
         let emoji = get_decomposer()
             .fetch_emoji(&props.host, &props.name)
             .await
-            .map_err(|e| error!("failed to fetch emoji url: {e}"))
+            .map_err(|e| error!("failed to fetch emoji url: {e:?}"))
             .ok()?;
         Some(emoji.url)
     }
@@ -292,6 +299,33 @@ pub fn Emoji(props: EmojiProp) -> Element {
         rsx! {
             span { ":{props.name}:" }
         }
+    }
+}
+
+#[component]
+pub fn Reaction(props: ReactionProp) -> Element {
+    debug!("rendering reaction {}", props.name);
+
+    let re = Regex::new("^:(.*)@(.*):$").unwrap();
+    match re.captures(&props.name).expect("regex error") {
+        Some(captures) => rsx! {
+            div {
+                class: "reaction-button",
+                Emoji {
+                    host: Host::from(captures.get(2).unwrap().as_str().to_owned()),
+                    name: captures.get(1).unwrap().as_str()
+                }
+                span { "{props.count}" }
+            }
+        },
+
+        None => rsx! {
+            div {
+                class: "reaction-button",
+                span { "{props.name}" }
+                span { "{props.count}" }
+            }
+        },
     }
 }
 
