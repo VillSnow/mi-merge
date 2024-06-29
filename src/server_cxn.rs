@@ -1,17 +1,24 @@
 use std::{
     error::Error,
-    future::Future,
+    future::{Future, IntoFuture},
     mem::{forget, MaybeUninit},
 };
 
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{
+    stream::{SplitSink, SplitStream},
+    SinkExt, StreamExt,
+};
 use serde_json::json;
 use tokio::{
-    sync::mpsc::{self, error::TryRecvError, UnboundedReceiver, UnboundedSender},
+    net::TcpStream,
+    sync::{
+        mpsc::{self, error::TryRecvError, UnboundedReceiver, UnboundedSender},
+        oneshot,
+    },
     task::JoinHandle,
 };
-use tokio_tungstenite::{connect_async, tungstenite::Message};
-use tracing::{debug, error, info};
+use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::{common_types::Host, mi_models::WsMsg};
@@ -43,21 +50,6 @@ enum ThrResource<T> {
     Offline(T),
 }
 
-#[derive(Debug)]
-pub struct ServerCxn {
-    host: Host,
-    api_key: String,
-
-    outlet: UnboundedReceiver<WsMsg>,
-    inlet: UnboundedSender<String>,
-
-    recv_thr: ThrResource<UnboundedSender<WsMsg>>,
-    send_thr: ThrResource<(UnboundedReceiver<String>, Option<String>)>,
-
-    home_timeline_id: Option<String>,
-    local_timeline_id: Option<String>,
-}
-
 impl<T> ThrResource<T> {
     fn into_online<F>(&mut self, f: impl FnOnce(T) -> F)
     where
@@ -79,6 +71,96 @@ impl<T> ThrResource<T> {
             }
         }
     }
+}
+
+struct RecvThr {
+    tx: UnboundedSender<WsMsg>,
+    ws_rx: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+}
+
+impl RecvThr {
+    async fn run(mut self) -> UnboundedSender<WsMsg> {
+        while let Some(Ok(m)) = self.ws_rx.next().await {
+            match m {
+                Message::Text(m) => {
+                    let m = match serde_json::from_str::<serde_json::Value>(&m) {
+                        Ok(m) => m,
+                        Err(e) => {
+                            error!("{e:?}");
+                            continue;
+                        }
+                    };
+                    let m = match serde_json::from_value::<WsMsg>(m) {
+                        Ok(m) => m,
+                        Err(e) => {
+                            info!("{e:?}");
+                            continue;
+                        }
+                    };
+                    debug!("{m:?}");
+
+                    self.tx.send(m).expect("mpsc error");
+                }
+                Message::Ping(_) => {}
+                m => debug!("{m:?}"),
+            }
+        }
+
+        self.tx
+    }
+}
+
+struct SendThr {
+    rx: UnboundedReceiver<String>,
+    pending: Option<String>,
+    ws_tx: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
+    idle_tx: Option<oneshot::Sender<()>>,
+}
+
+impl SendThr {
+    async fn run(mut self) -> (UnboundedReceiver<String>, Option<String>) {
+        if let Some(m) = self.pending.take() {
+            dbg!();
+            if self.ws_tx.send(Message::Text(m.clone())).await.is_err() {
+                return (self.rx, Some(m));
+            }
+        }
+
+        loop {
+            match self.rx.try_recv() {
+                Ok(m) => {
+                    if self.ws_tx.send(Message::Text(m.clone())).await.is_err() {
+                        return (self.rx, Some(m));
+                    };
+                }
+                Err(TryRecvError::Disconnected) => break,
+                Err(TryRecvError::Empty) => {
+                    if let Some(idle_tx) = self.idle_tx.take() {
+                        idle_tx.send(()).expect("channel error");
+                    }
+                    tokio::task::yield_now().await;
+                    continue;
+                }
+            }
+        }
+
+        (self.rx, None)
+    }
+}
+
+#[derive(Debug)]
+pub struct ServerCxn {
+    host: Host,
+    api_key: String,
+
+    outlet: UnboundedReceiver<WsMsg>,
+    inlet: UnboundedSender<String>,
+
+    recv_thr: ThrResource<UnboundedSender<WsMsg>>,
+    send_thr: ThrResource<(UnboundedReceiver<String>, Option<String>)>,
+
+    home_timeline_id: Option<String>,
+    local_timeline_id: Option<String>,
 }
 
 impl ServerCxn {
@@ -105,52 +187,24 @@ impl ServerCxn {
         let (ws, _res) = connect_async(req)
             .await
             .map_err(|_| ServerCxnError::ConnectError)?;
-        let (mut ws_tx, mut ws_rs) = ws.split();
+        let (ws_tx, ws_rx) = ws.split();
+        let (idle_tx, idle_rs) = oneshot::channel::<()>();
 
-        self.recv_thr.into_online(|outlet_rx| async move {
-            while let Some(Ok(m)) = ws_rs.next().await {
-                match m {
-                    Message::Text(m) => {
-                        let m = match serde_json::from_str::<serde_json::Value>(&m) {
-                            Ok(m) => m,
-                            Err(e) => {
-                                error!("{e:?}");
-                                continue;
-                            }
-                        };
-                        let m = match serde_json::from_value::<WsMsg>(m) {
-                            Ok(m) => m,
-                            Err(e) => {
-                                info!("{e:?}");
-                                continue;
-                            }
-                        };
-                        debug!("{m:?}");
-
-                        outlet_rx.send(m).expect("mpsc error");
-                    }
-                    Message::Ping(_) => {}
-                    m => debug!("{m:?}"),
-                }
+        self.recv_thr.into_online(|tx| RecvThr { tx, ws_rx }.run());
+        self.send_thr.into_online(|(rx, pending)| {
+            SendThr {
+                rx,
+                pending,
+                ws_tx,
+                idle_tx: Some(idle_tx),
             }
-
-            outlet_rx
+            .run()
         });
 
-        self.send_thr.into_online(|(mut inlet_tx, m)| async move {
-            if let Some(m) = m {
-                dbg!();
-                if ws_tx.send(Message::Text(m.clone())).await.is_err() {
-                    return (inlet_tx, Some(m));
-                }
-            }
-            while let Some(m) = inlet_tx.recv().await {
-                if ws_tx.send(Message::Text(m.clone())).await.is_err() {
-                    return (inlet_tx, Some(m));
-                };
-            }
-            (inlet_tx, None)
-        });
+        match idle_rs.await {
+            Ok(_) => info!("the receive thread is idle"),
+            Err(_) => warn!("the receive thread has downed before it becomes idle"),
+        }
 
         Ok(())
     }
