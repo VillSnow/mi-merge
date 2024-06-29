@@ -1,8 +1,4 @@
-use std::{
-    error::Error,
-    future::{Future, IntoFuture},
-    mem::{forget, MaybeUninit},
-};
+use std::{error::Error, future::Future};
 
 use futures_util::{
     stream::{SplitSink, SplitStream},
@@ -48,6 +44,7 @@ impl Error for ServerCxnError {}
 enum ThrResource<T> {
     Online(JoinHandle<T>),
     Offline(T),
+    Uninit,
 }
 
 impl<T> ThrResource<T> {
@@ -56,20 +53,12 @@ impl<T> ThrResource<T> {
         F: Future<Output = T> + Send + 'static,
         F::Output: Send + 'static,
     {
-        if !matches!(self, ThrResource::Offline(_)) {
-            panic!("invalid operation");
-        }
-        unsafe {
-            let value = std::mem::replace(self, MaybeUninit::uninit().assume_init());
-
-            match value {
-                ThrResource::Offline(r) => {
-                    let uninit = std::mem::replace(self, Self::Online(tokio::spawn(f(r))));
-                    forget(uninit);
-                }
-                _ => unreachable!(),
-            }
-        }
+        let r = match std::mem::replace(self, Self::Uninit) {
+            Self::Online(_) => panic!("invalid operation"),
+            Self::Offline(r) => r,
+            Self::Uninit => unreachable!(),
+        };
+        *self = Self::Online(tokio::spawn(f(r)));
     }
 }
 
