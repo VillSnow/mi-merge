@@ -62,14 +62,14 @@ impl AppModel {
         cxn.spawn().await.expect("TODO: handle error");
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let mut timeline = ServerNoteRepo::new();
-        let receiver = timeline.make_updated_note_receiver();
+        let mut repo = ServerNoteRepo::new();
+        let receiver = repo.make_updated_note_receiver();
 
         let cxn = Arc::new(RwLock::new(cxn));
-        let timeline = Arc::new(RwLock::new(timeline));
+        let repo = Arc::new(RwLock::new(repo));
 
         let poller = WsPoller {
-            timeline: timeline.clone(),
+            repo: repo.clone(),
             cxn: cxn.clone(),
             host: host.clone(),
             home_timeline_id,
@@ -85,7 +85,7 @@ impl AppModel {
 
         match fetch_home_notes(host, api_key).await {
             Ok(notes) => {
-                let mut tl = timeline.write().await;
+                let mut tl = repo.write().await;
                 let branches = HashSet::from([BranchKey {
                     host: host.clone(),
                     timeline: BranchTimeline::Home,
@@ -103,7 +103,7 @@ impl AppModel {
         }
         match fetch_local_notes(host, api_key).await {
             Ok(notes) => {
-                let mut tl = timeline.write().await;
+                let mut tl = repo.write().await;
                 let branches = HashSet::from([BranchKey {
                     host: host.clone(),
                     timeline: BranchTimeline::Local,

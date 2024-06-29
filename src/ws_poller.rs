@@ -12,7 +12,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct WsPoller {
-    pub timeline: Arc<RwLock<ServerNoteRepo>>,
+    pub repo: Arc<RwLock<ServerNoteRepo>>,
     pub cxn: Arc<RwLock<ServerCxn>>,
     pub host: Host,
     pub home_timeline_id: String,
@@ -50,7 +50,7 @@ impl WsPoller {
                         return;
                     };
 
-                    self.timeline
+                    self.repo
                         .write()
                         .await
                         .upsert(
@@ -65,7 +65,7 @@ impl WsPoller {
                     id: note_id,
                     body,
                 }) => {
-                    self.timeline
+                    self.repo
                         .write()
                         .await
                         .incr_reaction(&note_id, &body.reaction);
