@@ -1,10 +1,10 @@
-use std::{error::Error, fs::File, io::BufReader, sync::Arc};
+use std::{collections::HashSet, error::Error, fs::File, io::BufReader, sync::Arc, time::Duration};
 
 use serde_json::json;
 use tokio::sync::{mpsc::UnboundedReceiver, RwLock};
 
 use crate::{
-    common_types::{BranchKey, BranchTimeline, Credential, DynNoteModel, Host},
+    common_types::{BranchKey, BranchTimeline, Credential, DynNoteModel, Host, NoteModel},
     merged_timeline::MergedTimeline,
     mi_models::Note,
     server_cxn::ServerCxn,
@@ -60,6 +60,7 @@ impl AppModel {
         });
 
         cxn.spawn().await.expect("TODO: handle error");
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let mut timeline = ServerNoteRepo::new();
         let receiver = timeline.make_updated_note_receiver();
@@ -84,16 +85,16 @@ impl AppModel {
 
         match fetch_home_notes(host, api_key).await {
             Ok(notes) => {
-                let mut tl = self.merged_timeline.write().await;
-                let branch = BranchKey {
+                let mut tl = timeline.write().await;
+                let branches = HashSet::from([BranchKey {
                     host: host.clone(),
                     timeline: BranchTimeline::Home,
-                };
+                }]);
 
                 for note in notes.into_iter().rev() {
-                    let mut dyn_model = DynNoteModel::from_mi_model(note, host.clone());
-                    dyn_model.branches.extend([branch.clone()]);
-                    tl.upsert(dyn_model).await.expect("TODO: handle error");
+                    let model = NoteModel::from_mi_model(note, host.clone());
+                    tl.upsert(model, branches.clone())
+                        .expect("TODO: handle error");
                 }
             }
             Err(e) => {
@@ -102,16 +103,16 @@ impl AppModel {
         }
         match fetch_local_notes(host, api_key).await {
             Ok(notes) => {
-                let mut tl = self.merged_timeline.write().await;
-                let branch = BranchKey {
+                let mut tl = timeline.write().await;
+                let branches = HashSet::from([BranchKey {
                     host: host.clone(),
                     timeline: BranchTimeline::Local,
-                };
+                }]);
 
                 for note in notes.into_iter().rev() {
-                    let mut dyn_model = DynNoteModel::from_mi_model(note, host.clone());
-                    dyn_model.branches.extend([branch.clone()]);
-                    tl.upsert(dyn_model).await.expect("TODO: handle error");
+                    let model = NoteModel::from_mi_model(note, host.clone());
+                    tl.upsert(model, branches.clone())
+                        .expect("TODO: handle error");
                 }
             }
             Err(e) => {
