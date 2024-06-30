@@ -61,20 +61,23 @@ pub fn Note(props: NoteProps) -> Element {
             Emoji { host: props.original_host.clone(), name: x }
         },
     });
+
+    let branch_line_scale = 1000 / 25;
+
     let branches = props.branch_fragments.iter().map(|x| {
         let top_line = rsx! {
             div { class: "svg-container",
                 svg {
-                    class: "branch-line",
-                    view_box: "0 0 100 100",
+                    style: "transform: scaleY({branch_line_scale})",
+                    view_box: "0 0 100 1000",
                     width: 100,
                     height: 100,
                     preserve_aspect_ratio: "none",
                     line {
                         x1: "50",
                         x2: "50",
-                        y1: "50",
-                        y2: "100",
+                        y1: "500",
+                        y2: "1000",
                         fill: "none",
                         stroke: "{x.color}",
                         stroke_width: "20"
@@ -85,8 +88,8 @@ pub fn Note(props: NoteProps) -> Element {
         let full_line = rsx! {
             div { class: "svg-container",
                 svg {
-                    class: "branch-line",
-                    view_box: "0 0 100 100",
+                    style: "transform: scaleY({branch_line_scale})",
+                    view_box: "0 0 100 1000",
                     width: 100,
                     height: 100,
                     preserve_aspect_ratio: "none",
@@ -94,7 +97,7 @@ pub fn Note(props: NoteProps) -> Element {
                         x1: "50",
                         x2: "50",
                         y1: "0",
-                        y2: "100",
+                        y2: "1000",
                         fill: "none",
                         stroke: "{x.color}",
                         stroke_width: "20"
@@ -143,23 +146,25 @@ pub fn Note(props: NoteProps) -> Element {
     });
 
     rsx! {
-        div { class: "note",
+        div { class: "note-row",
             div { class: "branches", {branches} }
-            div { class: "avatar",
-                img { src: "{props.avatar_url}" }
-            }
-            div { class: "header",
-                div { class: "user-name",
-                    span { {username} }
+            article { class: "note",
+                div { class: "avatar",
+                    img { src: "{props.avatar_url}" }
                 }
-                div { class: "note-info", "{props.note_info}" }
-            }
-            div { class: "body",
-                span { {body} }
-            }
-            div { class: "reactions",
-                for (r , n) in props.reactions {
-                    Reaction { name: r, count: n }
+                div { class: "header",
+                    div { class: "user-name",
+                        span { {username} }
+                    }
+                    div { class: "note-info", "{props.note_info}" }
+                }
+                div { class: "body",
+                    span { {body} }
+                }
+                div { class: "reactions",
+                    for (r , n) in props.reactions {
+                        Reaction { name: r, count: n }
+                    }
                 }
             }
         }
