@@ -1,12 +1,13 @@
 use std::{collections::HashMap, error::Error};
 
 use serde_json::json;
+use tracing::info;
 
-use crate::{common_types::Host, mi_models::Emoji};
+use crate::{common_types::Host, mi_models::EmojiSimple};
 
 #[derive(Debug, Clone, Default)]
 pub struct EmojiService {
-    cache: HashMap<(Host, String), Emoji>,
+    cache: HashMap<(Host, String), EmojiSimple>,
 }
 
 #[derive(Debug)]
@@ -35,27 +36,40 @@ impl EmojiService {
         Self::default()
     }
 
-    pub fn get(&self, host: &Host, name: &str) -> Option<&Emoji> {
-        self.cache.get(&(host.clone(), name.to_owned()))
-    }
+    pub async fn fetch(
+        &mut self,
+        host: &Host,
+        name: &str,
+    ) -> Result<EmojiSimple, EmojiServiceError> {
+        use std::collections::hash_map::Entry;
 
-    pub fn insert(&mut self, host: Host, name: String, emoji: Emoji) {
-        self.cache.insert((host.clone(), name.to_owned()), emoji);
-    }
+        let key = (host.clone(), name.to_owned());
+        let entry = self.cache.entry(key);
+        let entry = match entry {
+            Entry::Occupied(cached) => return Ok(cached.get().clone()),
+            Entry::Vacant(entry) => entry,
+        };
 
-    pub async fn fetch(host: &Host, name: &str) -> Result<Emoji, EmojiServiceError> {
+        info!("fetching emoji info of :{}@{}:", name, host);
+
         let res = reqwest::Client::new()
-            .post(format!("https://{host}/emoji"))
-            .body(json!({"name": name}).to_string())
+            .post(format!("https://{host}/api/emoji"))
+            .json(&json!({"name": name}))
             .send()
             .await
+            .map_err(|_e| EmojiServiceError::HttpRequestError)?
+            .error_for_status()
             .map_err(|_e| EmojiServiceError::HttpRequestError)?;
+
         let text = res
             .text()
             .await
             .map_err(|_e| EmojiServiceError::HttpRequestError)?;
-        let emoji: Emoji =
+        dbg!(&text);
+        let emoji: EmojiSimple =
             serde_json::from_str(&text).map_err(|_e| EmojiServiceError::InvalidFormatResponse)?;
+
+        entry.insert(emoji.clone());
         Ok(emoji)
     }
 }

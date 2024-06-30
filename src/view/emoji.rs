@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use tracing::{debug, error};
 
-use crate::{common_types::Host, global_state::get_decomposer};
+use crate::{common_types::Host, global_state::get_emoji_service};
 
 #[derive(Clone, PartialEq, Eq, Props)]
 pub struct EmojiProp {
@@ -14,8 +14,10 @@ pub fn Emoji(props: EmojiProp) -> Element {
     debug!("rendering emoji {}", props.name);
 
     async fn f(props: EmojiProp) -> Option<String> {
-        let emoji = get_decomposer()
-            .fetch_emoji(&props.host, &props.name)
+        let emoji = get_emoji_service()
+            .write()
+            .await
+            .fetch(&props.host, &props.name)
             .await
             .map_err(|e| error!("failed to fetch emoji url: {e:?}"))
             .ok()?;
