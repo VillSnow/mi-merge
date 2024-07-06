@@ -42,6 +42,7 @@ impl AppModel {
         for c in credentials.into_iter().filter(|x| !x.disable) {
             self.connect(&c.host.into(), &c.api_key).await
         }
+        self.merged_timeline.write().await.implicit_sort().await;
 
         Ok(())
     }

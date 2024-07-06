@@ -89,6 +89,21 @@ impl MergedTimeline {
         Ok(())
     }
 
+    pub async fn implicit_sort(&mut self) {
+        let mut keys = HashMap::new();
+        for x in &self.column {
+            let ptr = Arc::as_ptr(&x.dyn_note_model);
+            let t = x.dyn_note_model.read().await.mi_note.created_at.clone();
+            keys.insert(ptr, t);
+        }
+
+        self.column.make_contiguous().sort_by(|a, b| {
+            let a = &keys[&Arc::as_ptr(&a.dyn_note_model)];
+            let b = &keys[&Arc::as_ptr(&b.dyn_note_model)];
+            a.cmp(b).reverse()
+        })
+    }
+
     pub fn make_column_receiver(&mut self) -> UnboundedReceiver<Vec<DynNoteModel>> {
         let (tx, rx) = unbounded_channel();
         self.column_senders.push(tx);
