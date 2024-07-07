@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use chrono::prelude::*;
 use dioxus::prelude::*;
 use palette::{FromColor, Oklab, Srgb};
 
@@ -32,7 +33,9 @@ pub fn Home() -> Element {
                     user_name: x.mi_note.user.name.unwrap_or(x.mi_note.user.username),
                     note_info: format!(
                         "{} {:?} {:?}",
-                        x.mi_note.created_at, x.mi_note.visibility, x.mi_note.local_only
+                        from_now(&x.mi_note.created_at),
+                        x.mi_note.visibility,
+                        x.mi_note.local_only
                     ),
                     text: x.mi_note.text.unwrap_or("".to_owned()),
                     file_thumbnails: x
@@ -86,4 +89,44 @@ fn make_color(n: usize) -> String {
     let g = (rgb.green * 256.0).round().min(255.0) as u8;
     let b = (rgb.blue * 256.0).round().min(255.0) as u8;
     return format!("#{r:02x}{g:02x}{b:02x}");
+}
+
+fn from_now(t: &DateTime<chrono::Utc>) -> String {
+    let dur = Utc::now() - t;
+    let neg = dur < chrono::TimeDelta::zero();
+    let dur = dur.abs();
+    let s = if dur.subsec_nanos() >= 500 {
+        dur.num_seconds() + 1
+    } else {
+        dur.num_seconds()
+    };
+
+    if s < 45 {
+        if neg {
+            format!("{:}秒後", s)
+        } else {
+            format!("{}秒前", s)
+        }
+    } else if s < 45 * 60 {
+        let m = (s as f64 / 60.0).round();
+        if neg {
+            format!("{m}分後")
+        } else {
+            format!("{m}分前")
+        }
+    } else if s < 22 * 60 * 60 {
+        let h = (s as f64 / (60.0 * 60.0)).round();
+        if neg {
+            format!("{h}時間後")
+        } else {
+            format!("{h}時間前")
+        }
+    } else {
+        let d = (s as f64 / (60.0 * 60.0 * 24.0)).round();
+        if neg {
+            format!("{d}日後")
+        } else {
+            format!("{d}日前")
+        }
+    }
 }

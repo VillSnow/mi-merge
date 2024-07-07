@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -7,7 +8,7 @@ pub struct Note {
     pub id: String,
 
     #[serde(rename = "createdAt")]
-    pub created_at: String,
+    pub created_at: DateTime<Utc>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
