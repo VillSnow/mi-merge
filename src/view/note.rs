@@ -24,6 +24,9 @@ pub struct NoteProps {
     pub text: String,
 
     #[props(into)]
+    pub file_thumbnails: Vec<String>,
+
+    #[props(into)]
     pub reactions: Vec<(String, i64)>,
 
     #[props(into)]
@@ -160,6 +163,11 @@ pub fn Note(props: NoteProps) -> Element {
                 }
                 div { class: "body",
                     span { {body} }
+                }
+                div { class: "files",
+                    for x in props.file_thumbnails {
+                        img { class: "file_thumbnail", src: x }
+                    }
                 }
                 div { class: "reactions",
                     for (r , n) in props.reactions {

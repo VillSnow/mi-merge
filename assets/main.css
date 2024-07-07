@@ -73,6 +73,7 @@ body {
     grid-template-areas:
       "avatar header"
       "avatar body  "
+      "avatar files "
       "avatar footer";
     gap: 2px;
 
@@ -112,6 +113,15 @@ body {
       .emoji {
         height: 2em;
         vertical-align: middle;
+      }
+    }
+
+    .files {
+      grid-area: files;
+
+      .file_thumbnail {
+        min-width: 0;
+        max-width: 100%;
       }
     }
 

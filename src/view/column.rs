@@ -21,6 +21,7 @@ pub fn Column(props: ColumnProps) -> Element {
                     user_name: &note.user_name,
                     note_info: &note.note_info,
                     text: &note.text,
+                    file_thumbnails: note.file_thumbnails.clone(),
                     reactions: note.reactions.clone(),
                     branch_fragments: note.branch_fragments.clone()
                 }

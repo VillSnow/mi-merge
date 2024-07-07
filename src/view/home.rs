@@ -35,6 +35,12 @@ pub fn Home() -> Element {
                         x.mi_note.created_at, x.mi_note.visibility, x.mi_note.local_only
                     ),
                     text: x.mi_note.text.unwrap_or("".to_owned()),
+                    file_thumbnails: x
+                        .mi_note
+                        .files
+                        .iter()
+                        .filter_map(|x| x.thumbnail_url.clone())
+                        .collect(),
                     reactions: x.reactions.clone(),
                     branch_fragments: branches
                         .iter()

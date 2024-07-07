@@ -137,32 +137,32 @@ pub struct UserInstance {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct DriveFile {
-    id: String,
+    pub id: String,
 
     #[serde(rename = "createdAt")]
-    created_at: String,
+    pub created_at: String,
 
     #[serde(rename = "isSensitive")]
-    is_sensitive: bool,
+    pub is_sensitive: bool,
 
-    name: String,
+    pub name: String,
 
     #[serde(rename = "thumbnailUrl")]
-    thumbnail_url: Option<String>,
+    pub thumbnail_url: Option<String>,
 
-    url: String,
+    pub url: String,
 
     #[serde(rename = "type")]
-    type_: String,
+    pub type_: String,
 
-    size: i64,
+    pub size: i64,
 
-    md5: String,
+    pub md5: String,
 
     #[serde(rename = "blurhash")]
-    blur_hash: Option<String>,
+    pub blur_hash: Option<String>,
 
-    comment: Option<String>,
+    pub comment: Option<String>,
     // TODO: properties: Record<string, any>,
 }
 
