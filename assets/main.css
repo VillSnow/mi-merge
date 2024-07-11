@@ -74,7 +74,7 @@ body {
       "avatar header"
       "avatar body  "
       "avatar files "
-      "avatar footer";
+      "avatar reactions";
     gap: 2px;
 
     .avatar {
@@ -126,6 +126,7 @@ body {
     }
 
     .reactions {
+      grid-area: reactions;
       display: flex;
       gap: 0.25em;
 
