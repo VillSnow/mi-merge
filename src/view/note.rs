@@ -4,6 +4,15 @@ use super::*;
 use crate::{common_types::Host, global_state::get_decomposer};
 
 #[derive(Clone, PartialEq, Eq, Props)]
+pub struct RenoteInfo {
+    #[props(into)]
+    pub avatar_url: String,
+
+    #[props(into)]
+    pub user_name: String,
+}
+
+#[derive(Clone, PartialEq, Eq, Props)]
 pub struct NoteProps {
     #[props(into)]
     pub original_host: Host,
@@ -31,6 +40,9 @@ pub struct NoteProps {
 
     #[props(into)]
     pub branch_fragments: Vec<BranchFragment>,
+
+    #[props(into)]
+    pub renote: Option<RenoteInfo>,
 }
 
 #[derive(Clone, PartialEq, Eq, Props)]
@@ -152,6 +164,17 @@ pub fn Note(props: NoteProps) -> Element {
         div { class: "note-row",
             div { class: "branches", {branches} }
             article { class: "note",
+
+                if let Some(renote) = props.renote {
+                    div { class: "renote-header",
+                        div {
+                            img { src: "{renote.avatar_url}" }
+                        }
+                        div {
+                            span { {renote.user_name} }
+                        }
+                    }
+                }
                 div { class: "avatar",
                     img { src: "{props.avatar_url}" }
                 }

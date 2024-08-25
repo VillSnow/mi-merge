@@ -69,13 +69,28 @@ body {
     flex: 1 1 0;
     display: grid;
     grid-template-columns: auto 1fr;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto 1fr;
     grid-template-areas:
+      "renote renote"
       "avatar header"
       "avatar body  "
       "avatar files "
       "avatar reactions";
     gap: 2px;
+
+    .renote-header {
+      grid-area: renote;
+      display: flex;
+
+      img {
+        position: sticky;
+        top: 0;
+        min-width: 25px;
+        min-height: 25px;
+        max-width: 25px;
+        max-height: 25px;
+      }
+    }
 
     .avatar {
       grid-area: avatar;

@@ -1,11 +1,14 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, ops::Deref};
 
 use chrono::prelude::*;
 use dioxus::prelude::*;
 use palette::{FromColor, Oklab, Srgb};
 
 use super::*;
-use crate::{common_types::BranchKey, global_state::get_app_model};
+use crate::{
+    common_types::{BranchKey, DynNoteModel},
+    global_state::get_app_model,
+};
 
 #[component]
 pub fn Home() -> Element {
@@ -26,44 +29,7 @@ pub fn Home() -> Element {
             let mut branch_trace = HashSet::<BranchKey>::new();
 
             for x in model_notes {
-                notes_prop.push(NoteProps {
-                    original_host: x.original_host,
-                    uri: x.uri,
-                    avatar_url: x.mi_note.user.avatar_url,
-                    user_name: x.mi_note.user.name.unwrap_or(x.mi_note.user.username),
-                    note_info: format!(
-                        "{} {:?} {:?}",
-                        from_now(&x.mi_note.created_at),
-                        x.mi_note.visibility,
-                        x.mi_note.local_only
-                    ),
-                    text: x.mi_note.text.unwrap_or("".to_owned()),
-                    file_thumbnails: x
-                        .mi_note
-                        .files
-                        .iter()
-                        .filter_map(|x| x.thumbnail_url.clone())
-                        .collect(),
-                    reactions: x.reactions.clone(),
-                    branch_fragments: branches
-                        .iter()
-                        .enumerate()
-                        .map(|(i, y)| BranchFragment {
-                            color: make_color(i),
-                            view: if branch_trace.contains(y) {
-                                if x.branches.contains(y) {
-                                    BranchFragmentView::Full
-                                } else {
-                                    BranchFragmentView::Skip
-                                }
-                            } else if x.branches.contains(&y) {
-                                BranchFragmentView::Top
-                            } else {
-                                BranchFragmentView::None
-                            },
-                        })
-                        .collect(),
-                });
+                notes_prop.push(make_note_prop(&x, &branches, &mut branch_trace));
 
                 branch_trace.extend(x.branches);
             }
@@ -74,6 +40,68 @@ pub fn Home() -> Element {
 
     rsx! {
         Column { notes }
+    }
+}
+
+fn make_note_prop(
+    x: &DynNoteModel,
+    branches: &[BranchKey],
+    branch_trace: &mut HashSet<BranchKey>,
+) -> NoteProps {
+    let renote_header;
+    let main_note;
+    if let Some(renote) = &x.mi_note.renote {
+        renote_header = Some(&x.mi_note);
+        main_note = renote.deref();
+    } else {
+        renote_header = None;
+        main_note = &x.mi_note;
+    }
+
+    NoteProps {
+        original_host: x.original_host.clone(),
+        uri: x.uri.clone(),
+        avatar_url: main_note.user.avatar_url.clone(),
+        user_name: main_note
+            .user
+            .name
+            .clone()
+            .unwrap_or(main_note.user.username.clone()),
+        note_info: format!(
+            "{} {:?} {:?}",
+            from_now(&main_note.created_at),
+            main_note.visibility,
+            main_note.local_only
+        ),
+        text: main_note.text.clone().unwrap_or("".to_owned()),
+        file_thumbnails: main_note
+            .files
+            .iter()
+            .filter_map(|x| x.thumbnail_url.clone())
+            .collect(),
+        reactions: x.reactions.clone(),
+        branch_fragments: branches
+            .iter()
+            .enumerate()
+            .map(|(i, y)| BranchFragment {
+                color: make_color(i),
+                view: if branch_trace.contains(y) {
+                    if x.branches.contains(y) {
+                        BranchFragmentView::Full
+                    } else {
+                        BranchFragmentView::Skip
+                    }
+                } else if x.branches.contains(&y) {
+                    BranchFragmentView::Top
+                } else {
+                    BranchFragmentView::None
+                },
+            })
+            .collect(),
+        renote: renote_header.map(|x| RenoteInfo {
+            avatar_url: x.user.avatar_url.clone(),
+            user_name: x.user.name.clone().unwrap_or(x.user.username.clone()),
+        }),
     }
 }
 
