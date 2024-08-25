@@ -197,7 +197,7 @@ pub fn Note(props: NoteProps) -> Element {
                 }
                 div { class: "reactions",
                     for (r , n) in props.reactions {
-                        Reaction { name: r, count: n }
+                        Reaction { key: "{r}", name: r, count: n }
                     }
                 }
                 div { class: "debug",
