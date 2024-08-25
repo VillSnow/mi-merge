@@ -43,6 +43,9 @@ pub struct NoteProps {
 
     #[props(into)]
     pub renote: Option<RenoteInfo>,
+
+    #[props(into)]
+    pub debug: Option<String>,
 }
 
 #[derive(Clone, PartialEq, Eq, Props)]
@@ -195,6 +198,14 @@ pub fn Note(props: NoteProps) -> Element {
                 div { class: "reactions",
                     for (r , n) in props.reactions {
                         Reaction { name: r, count: n }
+                    }
+                }
+                div { class: "debug",
+                    if let Some(debug) = props.debug {
+                        details {
+                            summary { "デバッグ情報" }
+                            "{debug}"
+                        }
                     }
                 }
             }

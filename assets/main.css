@@ -69,13 +69,14 @@ body {
     flex: 1 1 0;
     display: grid;
     grid-template-columns: auto 1fr;
-    grid-template-rows: auto auto 1fr auto auto;
+    grid-template-rows: auto auto 1fr auto auto auto;
     grid-template-areas:
-      "renote renote"
-      "avatar header"
-      "avatar body  "
-      "avatar files "
-      "avatar reactions";
+      "renote renote   "
+      "avatar header   "
+      "avatar body     "
+      "avatar files    "
+      "avatar reactions"
+      "debug  debug    ";
     gap: 2px;
 
     .renote-header {
@@ -155,6 +156,10 @@ body {
           vertical-align: middle;
         }
       }
+    }
+
+    .debug {
+      grid-area: debug;
     }
   }
 }

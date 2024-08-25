@@ -24,7 +24,8 @@ pub fn Column(props: ColumnProps) -> Element {
                     file_thumbnails: note.file_thumbnails.clone(),
                     reactions: note.reactions.clone(),
                     branch_fragments: note.branch_fragments.clone(),
-                    renote: note.renote.clone()
+                    renote: note.renote.clone(),
+                    debug: note.debug.clone()
                 }
             }
         }

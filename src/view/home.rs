@@ -102,6 +102,7 @@ fn make_note_prop(
             avatar_url: x.user.avatar_url.clone(),
             user_name: x.user.name.clone().unwrap_or(x.user.username.clone()),
         }),
+        debug: cfg!(debug_assertions).then_some("hogehoge".to_string()),
     }
 }
 
