@@ -165,8 +165,8 @@ pub fn Note(props: NoteProps) -> Element {
             div { class: "branches", {branches} }
             article { class: "note",
 
-                if let Some(renote) = props.renote {
-                    div { class: "renote-header",
+                div { class: "renote-header",
+                    if let Some(renote) = props.renote {
                         div {
                             img { src: "{renote.avatar_url}" }
                         }

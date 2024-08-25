@@ -69,7 +69,7 @@ body {
     flex: 1 1 0;
     display: grid;
     grid-template-columns: auto 1fr;
-    grid-template-rows: auto auto 1fr;
+    grid-template-rows: auto auto 1fr auto auto;
     grid-template-areas:
       "renote renote"
       "avatar header"
