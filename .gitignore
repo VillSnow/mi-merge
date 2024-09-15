@@ -9,4 +9,5 @@
 **/*.rs.bk
 
 .env
+connections.json
 credentials.json

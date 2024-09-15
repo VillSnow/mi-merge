@@ -160,6 +160,7 @@ body {
 
     .debug {
       grid-area: debug;
+      white-space: pre-wrap;
     }
   }
 }

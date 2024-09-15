@@ -1,4 +1,4 @@
-use std::{error::Error, future::Future};
+use std::{collections::HashSet, error::Error, future::Future};
 
 use futures_util::{
     stream::{SplitSink, SplitStream},
@@ -23,6 +23,7 @@ use crate::{common_types::Host, mi_models::WsMsg};
 pub enum ServerCxnError {
     ConnectError,
     SendToClosedServerError,
+    HttpRequestError,
 }
 
 impl std::fmt::Display for ServerCxnError {
@@ -34,11 +35,20 @@ impl std::fmt::Display for ServerCxnError {
             ServerCxnError::SendToClosedServerError => {
                 write!(f, "tried to send to eventually disconnected server")
             }
+            ServerCxnError::HttpRequestError => {
+                write!(f, "http request error")
+            }
         }
     }
 }
 
 impl Error for ServerCxnError {}
+
+impl From<reqwest::Error> for ServerCxnError {
+    fn from(_value: reqwest::Error) -> Self {
+        Self::HttpRequestError
+    }
+}
 
 #[derive(Debug)]
 enum ThrResource<T> {
@@ -230,6 +240,24 @@ impl ServerCxn {
         );
         self.local_timeline_id = Some(local_timeline_id.clone());
         local_timeline_id
+    }
+
+    pub fn connect_to_channel(&mut self, channel_id: &str) -> String {
+        let cxn_channel_id = Uuid::new_v4().to_string();
+        self.send(
+            json!({
+                "type": "connect",
+                "body": {
+                    "id": cxn_channel_id.clone(),
+                    "channel": "channel",
+                    "params": {
+                        "channelId": channel_id
+                    }
+                }
+            })
+            .to_string(),
+        );
+        cxn_channel_id
     }
 
     pub fn subscribe_note(&mut self, note_id: &str) {

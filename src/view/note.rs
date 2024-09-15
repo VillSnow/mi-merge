@@ -48,13 +48,13 @@ pub struct NoteProps {
     pub debug: Option<String>,
 }
 
-#[derive(Clone, PartialEq, Eq, Props)]
+#[derive(Clone, PartialEq, Eq, Debug, Props)]
 pub struct BranchFragment {
     pub color: String,
     pub view: BranchFragmentView,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum BranchFragmentView {
     None,
     Top,

@@ -1,22 +1,21 @@
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 use tokio::sync::{mpsc::error::TryRecvError, RwLock};
-use tracing::warn;
 
 use crate::{
-    common_types::{BranchKey, BranchTimeline, Host, NoteModel},
+    common_types::{Host, NoteModel},
     mi_models::{NoteUpdatedBody, WsMsg, WsMsgChannelBody},
     server_cxn::ServerCxn,
     server_note_repo::ServerNoteRepo,
+    ws_msg_router::WsMsgRouter,
 };
 
 #[derive(Debug)]
 pub struct WsPoller {
     pub repo: Arc<RwLock<ServerNoteRepo>>,
     pub cxn: Arc<RwLock<ServerCxn>>,
+    pub router: WsMsgRouter,
     pub host: Host,
-    pub home_timeline_id: String,
-    pub local_timeline_id: String,
 }
 
 impl WsPoller {
@@ -35,27 +34,12 @@ impl WsPoller {
                 WsMsg::Channel(WsMsgChannelBody::Note { id: ch_id, body }) => {
                     let note_id = body.id.clone();
 
-                    let branch = if ch_id == self.home_timeline_id {
-                        BranchKey {
-                            host: self.host.clone(),
-                            timeline: BranchTimeline::Home,
-                        }
-                    } else if ch_id == self.local_timeline_id {
-                        BranchKey {
-                            host: self.host.clone(),
-                            timeline: BranchTimeline::Local,
-                        }
-                    } else {
-                        warn!("unknown connection id");
-                        return;
-                    };
-
                     self.repo
                         .write()
                         .await
                         .upsert(
                             NoteModel::from_mi_model(body, self.host.clone()),
-                            HashSet::from([branch]),
+                            self.router.solve_branches(&ch_id),
                         )
                         .expect("TODO: handle error");
 

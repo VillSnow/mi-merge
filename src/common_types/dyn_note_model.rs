@@ -1,10 +1,12 @@
 use std::collections::HashSet;
 
+use serde::Serialize;
+
 use crate::mi_models::Note;
 
 use super::{BranchKey, Host, NoteModel};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DynNoteModel {
     pub original_host: Host,
     pub source_host: Host,

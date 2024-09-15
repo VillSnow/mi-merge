@@ -15,7 +15,7 @@ pub fn Home() -> Element {
     let mut notes = use_signal(|| Vec::<NoteProps>::new());
 
     spawn(async move {
-        let branches = get_app_model().read().await.branches.clone();
+        let branches = get_app_model().read().await.branches();
         let mut rx = get_app_model()
             .read()
             .await
@@ -102,7 +102,8 @@ fn make_note_prop(
             avatar_url: x.user.avatar_url.clone(),
             user_name: x.user.name.clone().unwrap_or(x.user.username.clone()),
         }),
-        debug: cfg!(debug_assertions).then_some("hogehoge".to_string()),
+        debug: cfg!(debug_assertions)
+            .then_some(serde_json::to_string_pretty(&x).unwrap_or("parse error".to_string())),
     }
 }
 
